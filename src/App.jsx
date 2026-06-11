@@ -7,15 +7,19 @@ import {
   CircleDollarSign,
   Eye,
   FileText,
+  BriefcaseBusiness,
+  Camera,
   Home,
   LayoutDashboard,
   LockKeyhole,
   LogOut,
   Mail,
+  MapPinned,
   MapPin,
   Menu,
   Phone,
   Pencil,
+  Play,
   PlusCircle,
   Search,
   Settings,
@@ -169,16 +173,6 @@ const publicUser = {
   title: 'Public Access',
 };
 
-const pageTitles = {
-  dashboard: 'Property Dashboard',
-  'property-listing': 'Property Listing',
-  'add-property': 'Add Property',
-  agents: 'Agents',
-  reports: 'Reports',
-  'monthly-installment': 'Monthly Installment',
-  settings: 'Settings',
-};
-
 function AdminLoginDialog({ onClose, onLogin }) {
   const [credentials, setCredentials] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
@@ -325,9 +319,6 @@ function TopNav({
           </button>
         </div>
       </div>
-      <div className="glass-announcement px-4 py-3 text-center text-sm text-slate-800">
-        Welcome, {currentUser.name}. You are viewing <span className="font-semibold text-slate-950">{pageTitles[activePage]}</span>.
-      </div>
       {isMenuOpen && (
         <div className="glass-menu absolute left-0 right-0 top-full px-4 py-3 lg:hidden">
           <nav className="mx-auto grid max-w-7xl gap-1">
@@ -352,6 +343,60 @@ function TopNav({
         </div>
       )}
     </header>
+  );
+}
+
+function Footer() {
+  const footerLinks = ['Privacy Policy', 'Terms of Service', 'Contact Us'];
+  const socialLinks = [
+    { label: 'Location', icon: MapPinned },
+    { label: 'Instagram', icon: Camera },
+    { label: 'LinkedIn', icon: BriefcaseBusiness },
+    { label: 'YouTube', icon: Play },
+  ];
+
+  return (
+    <footer className="site-footer mt-auto">
+      <div className="mx-auto flex min-h-14 max-w-7xl flex-col items-center justify-between gap-4 px-4 py-3 sm:flex-row md:px-6 lg:px-8">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-amber-200 bg-white/70">
+            <img className="h-full w-full object-cover" src="/images/logo_infinite.jpeg" alt="Infinite Properties logo" />
+          </div>
+          <div className="min-w-0 text-center sm:text-left">
+            <p className="truncate text-sm font-bold text-stone-950">Infinite Properties Sdn. Bhd.</p>
+            <p className="text-xs font-medium text-stone-500">&copy; 2026 All rights reserved.</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-center gap-3 sm:flex-row sm:gap-8">
+          <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs font-medium text-stone-600 sm:text-sm">
+            {footerLinks.map((link, index) => (
+              <a key={link} href="#" className="inline-flex items-center gap-5 transition hover:text-amber-700">
+                <span>{link}</span>
+                {index < footerLinks.length - 1 && <span className="hidden text-stone-400 sm:inline">&middot;</span>}
+              </a>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-4">
+            {socialLinks.map((item) => {
+              const Icon = item.icon;
+              return (
+                <a
+                  key={item.label}
+                  href="#"
+                  className="footer-social"
+                  aria-label={item.label}
+                  title={item.label}
+                >
+                  <Icon size={16} strokeWidth={2.3} />
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </footer>
   );
 }
 
@@ -574,6 +619,8 @@ function RecentPropertiesTable({ properties, isAdmin = false, limit = 5, onDelet
                           key={salesPackage.id}
                           className="truncate font-semibold text-emerald-700 hover:text-emerald-600"
                           href={salesPackage.url}
+                          target="_blank"
+                          rel="noreferrer"
                           title={salesPackage.name}
                         >
                           {salesPackage.name}
@@ -1183,6 +1230,8 @@ function EditPropertyDialog({ property, locations = [], onClose, onSave }) {
                   <li key={salesPackage.id}>
                     <a
                       href={salesPackage.url}
+                      target="_blank"
+                      rel="noreferrer"
                       className="block truncate rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-emerald-700 transition hover:border-emerald-300 hover:text-emerald-600"
                       title={salesPackage.name}
                     >
@@ -1709,6 +1758,8 @@ function PropertyDetailsDialog({ property, onClose }) {
                     <a
                       key={salesPackage.id}
                       href={salesPackage.url}
+                      target="_blank"
+                      rel="noreferrer"
                       className="truncate rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-emerald-700 transition hover:border-emerald-300 hover:text-emerald-600"
                       title={salesPackage.name}
                     >
@@ -2787,7 +2838,7 @@ export default function App() {
   };
 
   return (
-    <div className="brand-shell min-h-screen bg-slate-50">
+    <div className="brand-shell flex min-h-screen flex-col bg-slate-50">
       <TopNav
         activePage={activePage}
         currentUser={currentUser}
@@ -2809,6 +2860,7 @@ export default function App() {
           {pages[activePage]}
         </div>
       </main>
+      <Footer />
       {isAdminDialogOpen && (
         <AdminLoginDialog onClose={() => setIsAdminDialogOpen(false)} onLogin={handleLogin} />
       )}

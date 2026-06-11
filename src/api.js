@@ -1,17 +1,30 @@
 async function request(path, options = {}) {
-  const response = await fetch(`/api${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
-  const data = await response.json().catch(() => ({}));
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 10000);
 
-  if (!response.ok) {
-    throw new Error(data.message || 'Unable to connect to the server.');
+  try {
+    const response = await fetch(`/api${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Unable to connect to the server.');
+    }
+    return data;
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('Unable to reach the API. Make sure the server is running.');
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
   }
-  return data;
 }
 
 export function login(credentials) {

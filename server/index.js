@@ -13,6 +13,60 @@ const propertyStatuses = ['Available', 'Booked', 'Sold'];
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173' }));
 app.use(express.json({ limit: '110mb' }));
 
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderSalesPackageViewer({ id, name, type }) {
+  const fileUrl = `/api/property-sales-packages/${encodeURIComponent(id)}`;
+  const downloadUrl = `${fileUrl}?download=1`;
+  const safeName = escapeHtml(name || 'Sales package');
+  const safeType = escapeHtml(type || 'File');
+  const canEmbed = type?.startsWith('image/') || type === 'application/pdf' || type?.startsWith('text/');
+  const preview = canEmbed
+    ? `<iframe class="preview" src="${fileUrl}" title="${safeName}"></iframe>`
+    : `<section class="empty"><h2>Preview is not available for this file type.</h2><p>You can keep this tab open or download the file when you are ready.</p></section>`;
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${safeName}</title>
+  <style>
+    body { margin: 0; background: #f8fafc; color: #0f172a; font-family: Arial, sans-serif; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 24px; border-bottom: 1px solid #e2e8f0; background: #fff; }
+    h1 { margin: 0; font-size: 18px; line-height: 1.3; }
+    p { margin: 4px 0 0; color: #64748b; }
+    a { border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 14px; color: #0f172a; font-size: 14px; font-weight: 700; text-decoration: none; white-space: nowrap; }
+    a:hover { border-color: #10b981; color: #047857; }
+    .preview { display: block; width: 100%; height: calc(100vh - 82px); border: 0; background: #fff; }
+    .empty { display: grid; min-height: calc(100vh - 82px); place-content: center; padding: 24px; text-align: center; }
+    .empty h2 { margin: 0; font-size: 22px; }
+    @media (max-width: 640px) {
+      header { align-items: flex-start; flex-direction: column; }
+      a { width: calc(100% - 30px); text-align: center; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>${safeName}</h1>
+      <p>${safeType}</p>
+    </div>
+    <a href="${downloadUrl}">Download</a>
+  </header>
+  ${preview}
+</body>
+</html>`;
+}
+
 function authenticate(req, res, next) {
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
 
@@ -120,7 +174,7 @@ app.get('/api/properties', async (_req, res, next) => {
       propertyPackages.push({
         id: salesPackage.id,
         name: salesPackage.name,
-        url: `/api/property-sales-packages/${salesPackage.id}`,
+        url: `/api/property-sales-packages/${salesPackage.id}/view`,
       });
       packages.set(salesPackage.propertyId, propertyPackages);
       return packages;
@@ -450,6 +504,33 @@ app.get('/api/properties/:id/sales-package', async (req, res, next) => {
   }
 });
 
+app.get('/api/property-sales-packages/:id/view', async (req, res, next) => {
+  try {
+    const [packages] = await pool.execute(
+      `SELECT sp.name, sp.type
+       FROM property_sales_packages sp
+       INNER JOIN properties p ON p.id = sp.property_id
+       WHERE sp.id = ? AND p.status <> 'D'
+       LIMIT 1`,
+      [req.params.id]
+    );
+    const salesPackage = packages[0];
+
+    if (!salesPackage) {
+      return res.status(404).send('Sales package not found.');
+    }
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(renderSalesPackageViewer({
+      id: req.params.id,
+      name: salesPackage.name,
+      type: salesPackage.type,
+    }));
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/property-sales-packages/:id', async (req, res, next) => {
   try {
     const [packages] = await pool.execute(
@@ -468,7 +549,7 @@ app.get('/api/property-sales-packages/:id', async (req, res, next) => {
 
     const safeName = String(salesPackage.name || 'sales-package').replace(/[\r\n"]/g, '_');
     res.setHeader('Content-Type', salesPackage.type || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
+    res.setHeader('Content-Disposition', `${req.query.download ? 'attachment' : 'inline'}; filename="${safeName}"`);
     res.send(salesPackage.data);
   } catch (error) {
     next(error);
