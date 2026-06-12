@@ -418,17 +418,17 @@ export function PermissionNotice({ isAdmin }) {
 export function StatCard({ stat }) {
   const Icon = stat.icon;
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-      <div className="flex items-start justify-between gap-4">
+    <div className="relative overflow-hidden rounded-lg border border-white/60 bg-white/25 p-5 text-slate-950 shadow-[0_22px_55px_rgba(15,23,42,0.18)] ring-1 ring-white/40 backdrop-blur-2xl backdrop-saturate-150 before:absolute before:inset-x-3 before:top-0 before:h-px before:bg-white/80 after:absolute after:-right-10 after:-top-12 after:h-28 after:w-28 after:rounded-full after:bg-white/30 after:blur-2xl">
+      <div className="relative z-10 flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-slate-500">{stat.label}</p>
+          <p className="text-sm font-bold text-stone-600">{stat.label}</p>
           <p className="mt-2 text-3xl font-bold text-slate-950">{stat.value}</p>
         </div>
-        <div className="grid h-11 w-11 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
+        <div className="grid h-11 w-11 place-items-center rounded-lg border border-white/60 bg-white/40 text-amber-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_10px_24px_rgba(15,23,42,0.12)] backdrop-blur-xl">
           <Icon size={22} />
         </div>
       </div>
-      <p className="mt-4 text-sm font-medium text-emerald-700">{stat.trend}</p>
+      <p className="relative z-10 mt-4 text-sm font-bold text-amber-800">{stat.trend}</p>
     </div>
   );
 }
@@ -503,49 +503,110 @@ export function MalaysiaLocationInput({
 }
 
 export function Filters({ filters, locations, onFilterChange, onClearFilters, resultCount }) {
+  const [activeMode, setActiveMode] = useState('Buy');
+  const popularLocations = (locations.length ? locations : malaysiaLocationOptions).slice(0, 5);
+
   return (
-    <section className="relative z-20 rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
-      <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm font-bold text-slate-950">Search and Filter</p>
-        <p className="text-sm font-medium text-slate-500">{resultCount} properties found</p>
+    <section className="relative z-20 overflow-hidden rounded-lg border border-white/60 bg-white/25 p-3 shadow-[0_24px_70px_rgba(15,23,42,0.18)] ring-1 ring-white/40 backdrop-blur-2xl backdrop-saturate-150 before:absolute before:inset-x-4 before:top-0 before:h-px before:bg-white/80 after:absolute after:-bottom-16 after:left-12 after:h-32 after:w-64 after:rounded-full after:bg-sky-100/30 after:blur-3xl">
+      <div className="relative z-10 grid grid-cols-3 overflow-hidden rounded-lg border border-white/30 bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.54)]">
+        {[
+          { label: 'Buy', icon: Building2 },
+          { label: 'Rent', icon: CircleDollarSign },
+          { label: 'Invest', icon: BriefcaseBusiness },
+        ].map((mode) => {
+          const Icon = mode.icon;
+          const isActive = activeMode === mode.label;
+
+          return (
+            <button
+              key={mode.label}
+              type="button"
+              onClick={() => setActiveMode(mode.label)}
+              className={`inline-flex h-14 items-center justify-center gap-2 border-r border-white/30 text-sm font-bold transition last:border-r-0 ${
+                isActive
+                  ? 'bg-white/30 text-slate-950 shadow-[inset_0_-1px_0_rgba(255,255,255,0.58)]'
+                  : 'text-stone-600 hover:bg-white/20 hover:text-slate-900'
+              }`}
+            >
+              <Icon size={17} className={isActive ? 'text-amber-700' : 'text-amber-600/70'} />
+              {mode.label}
+            </button>
+          );
+        })}
       </div>
-      <div className="grid gap-3 md:grid-cols-[1.3fr_1fr_1fr_auto]">
-        <label className="relative block">
-          <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+
+      <div className="relative z-10 mt-3 grid gap-3 md:grid-cols-[1.2fr_1fr_1fr_auto_auto]">
+        <label className="relative block min-w-0">
+          <MapPin className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-stone-500" size={18} />
+          <MalaysiaLocationInput
+            id="property-location-filter"
+            value={filters.location}
+            onChange={(value) => onFilterChange('location', value)}
+            locations={locations}
+            placeholder="Search location"
+            className="h-12 w-full rounded-lg border border-white/40 bg-white/40 pl-10 pr-3 text-sm font-semibold text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_10px_24px_rgba(15,23,42,0.08)] outline-none backdrop-blur-xl transition placeholder:text-stone-500 focus:border-amber-300 focus:bg-white/60 focus:ring-4 focus:ring-amber-200/30"
+          />
+        </label>
+        <label className="relative block min-w-0">
+          <Building2 className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-stone-500" size={18} />
+          <select
+            value={filters.status}
+            onChange={(event) => onFilterChange('status', event.target.value)}
+            className="h-12 w-full appearance-none rounded-lg border border-white/40 bg-white/40 pl-10 pr-3 text-sm font-semibold text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_10px_24px_rgba(15,23,42,0.08)] outline-none backdrop-blur-xl transition focus:border-amber-300 focus:bg-white/60 focus:ring-4 focus:ring-amber-200/30"
+          >
+            <option value="">Property Status</option>
+            {statuses.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="relative block min-w-0">
+          <Search className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-stone-500" size={18} />
           <input
             value={filters.search}
             onChange={(event) => onFilterChange('search', event.target.value)}
-            className="h-11 w-full rounded-lg border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-            placeholder="Search Property"
+            className="h-12 w-full rounded-lg border border-white/40 bg-white/40 pl-10 pr-3 text-sm font-semibold text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_10px_24px_rgba(15,23,42,0.08)] outline-none backdrop-blur-xl transition placeholder:text-stone-500 focus:border-amber-300 focus:bg-white/60 focus:ring-4 focus:ring-amber-200/30"
+            placeholder="Search property"
           />
         </label>
-        <MalaysiaLocationInput
-          id="property-location-filter"
-          value={filters.location}
-          onChange={(value) => onFilterChange('location', value)}
-          locations={locations}
-          placeholder="Search Location"
-          className="h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-700 outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-        />
-        <select
-          value={filters.status}
-          onChange={(event) => onFilterChange('status', event.target.value)}
-          className="h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-700 outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-        >
-          <option value="">Filter by Status</option>
-          {statuses.map((status) => (
-            <option key={status} value={status}>
-              {status}
-            </option>
-          ))}
-        </select>
         <button
-          onClick={onClearFilters}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-emerald-500 px-5 text-sm font-bold text-slate-950 transition hover:bg-emerald-400"
+          type="button"
+          className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-amber-500 px-6 text-sm font-bold text-white shadow-[0_14px_30px_rgba(180,115,22,0.32)] transition hover:bg-amber-400"
         >
-          <SlidersHorizontal size={17} />
+          <Search size={17} />
+          Search
+        </button>
+        <button
+          type="button"
+          onClick={onClearFilters}
+          className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-white/40 bg-white/25 px-4 text-sm font-bold text-stone-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.58)] transition hover:bg-white/40 hover:text-slate-950"
+        >
+          <X size={17} />
           Reset
         </button>
+      </div>
+
+      <div className="relative z-10 mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-bold text-stone-600">Popular:</span>
+          {popularLocations.map((location) => (
+            <button
+              key={location}
+              type="button"
+              onClick={() => onFilterChange('location', location)}
+              className={`rounded-full border px-4 py-1.5 text-xs font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.62)] transition ${
+                filters.location === location
+                  ? 'border-amber-300 bg-amber-100/70 text-amber-800'
+                  : 'border-white/40 bg-white/30 text-amber-800/80 hover:bg-white/50'
+              }`}
+            >
+              {location}
+            </button>
+          ))}
+        </div>
+        <p className="shrink-0 text-sm font-bold text-stone-600">{resultCount} properties found</p>
       </div>
     </section>
   );
@@ -769,16 +830,30 @@ export function PropertyCard({ property, isAdmin = false, onEdit, onViewDetails 
   );
 }
 
-export function PageHeader({ title, description, action }) {
+export function PageHeader({ title, description, action, backgroundImage, children }) {
+  const headerStyle = backgroundImage
+    ? { backgroundImage: `linear-gradient(90deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.76) 34%, rgba(255, 255, 255, 0.18) 64%, rgba(255, 255, 255, 0.02) 100%), url("${backgroundImage}")` }
+    : undefined;
+
   return (
-    <div className="mb-8 flex flex-col gap-5 py-4 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <p className="text-sm font-medium text-slate-500">Infinite Property Team | FLP Agency</p>
-        <h1 className="mt-4 text-5xl font-semibold leading-none text-slate-950 md:text-7xl">{title}</h1>
-        <p className="mt-4 max-w-2xl text-base font-medium text-slate-500 md:text-lg">{description}</p>
+    <section
+      className={`mb-8 flex flex-col gap-8 ${
+        backgroundImage
+          ? 'min-h-[28rem] justify-between overflow-hidden rounded-lg border border-white/80 bg-cover bg-center px-5 py-6 shadow-[0_28px_70px_rgba(15,23,42,0.16)] ring-1 ring-slate-950/5 md:min-h-[34rem] md:px-10 md:py-10 lg:px-12'
+          : 'py-4 sm:flex-row sm:items-end sm:justify-between'
+      }`}
+      style={headerStyle}
+    >
+      <div className={backgroundImage ? 'flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between' : undefined}>
+        <div className={backgroundImage ? 'max-w-2xl' : undefined}>
+          <p className="text-sm font-bold text-stone-500">Infinite Property Team | FLP Agency</p>
+          <h1 className="mt-4 text-5xl font-semibold leading-none text-slate-950 md:text-7xl">{title}</h1>
+          <p className="mt-4 max-w-2xl text-base font-semibold leading-7 text-stone-500 md:text-lg">{description}</p>
+        </div>
+        {action}
       </div>
-      {action}
-    </div>
+      {children}
+    </section>
   );
 }
 

@@ -41,13 +41,14 @@ export default function DashboardPage({
       <PageHeader
         title="Property Hub"
         description="A simple place to browse listings, check availability, review agents, and estimate monthly payments."
-      />
-
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {liveStats.map((stat) => (
-          <StatCard key={stat.label} stat={stat} />
-        ))}
-      </section>
+        backgroundImage="/images/ChatGPT Image Jun 12, 2026, 11_53_39 AM.png"
+      >
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {liveStats.map((stat) => (
+            <StatCard key={stat.label} stat={stat} />
+          ))}
+        </section>
+      </PageHeader>
 
       <div className="mt-6">
         <Filters
