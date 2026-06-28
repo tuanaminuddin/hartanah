@@ -44,16 +44,25 @@ React/Vite property CRM with an Express API and MySQL database.
    npm run dev
    ```
 
-The web app runs at `http://localhost:5173` and proxies `/api` requests to
+The web app runs at `http://localhost:5173/dashboard` and proxies `/api` requests to
 `http://localhost:3001`.
+
+Each page has its own URL and its own component file under `src/pages`:
+
+- `/dashboard`
+- `/property-listing`
+- `/add-property` (admin only)
+- `/agents` (admin only; manage agent and admin login accounts)
+- `/monthly-installment`
+- `/settings` (admin only)
 
 ## Access
 
 - Admin: `admin` / `admin123`
 
-Visitors open the dashboard directly and have read-only access to the public
-pages. Use the small lock in the sidebar footer or press `Ctrl+Shift+A` to
-sign in; the admin account can create properties and use the settings page.
+Visitors who are not signed in can access only the dashboard. Use the lock
+button or press `Ctrl+Shift+A` to sign in. Administrators
+can create and delete admin or agent portal accounts from the Add Agent page.
 
 ## Troubleshooting
 

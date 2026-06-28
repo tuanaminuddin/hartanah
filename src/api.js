@@ -72,14 +72,23 @@ export function softDeleteProperty(token, propertyId) {
   });
 }
 
-export function getAgents() {
-  return request('/agents');
+export function getUsers(token) {
+  return request('/users', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
 }
 
-export function createAgent(token, agent) {
-  return request('/agents', {
+export function createUser(token, user) {
+  return request('/users', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
-    body: JSON.stringify(agent),
+    body: JSON.stringify(user),
+  });
+}
+
+export function deleteUser(token, userId) {
+  return request(`/users/${userId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
   });
 }

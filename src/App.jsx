@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import {
-  createAgent,
   createProperty,
-  getAgents,
+  createUser,
+  deleteUser,
   getProperties,
+  getUsers,
   softDeleteProperty,
   updateProperty,
   updatePropertyKiv,
@@ -20,42 +21,74 @@ import AgentsPage from './pages/AgentsPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import MonthlyInstallmentPage from './pages/MonthlyInstallmentPage.jsx';
 import PropertyListingPage from './pages/PropertyListingPage.jsx';
-import ReportsPage from './pages/ReportsPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
+import { getPageFromPath, getPagePath } from './routes.js';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(publicUser);
   const [token, setToken] = useState('');
   const [isAdminDialogOpen, setIsAdminDialogOpen] = useState(false);
   const [propertyRecords, setPropertyRecords] = useState([]);
-  const [agentRecords, setAgentRecords] = useState([]);
+  const [userRecords, setUserRecords] = useState([]);
   const [dataError, setDataError] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [activePage, setActivePage] = useState('dashboard');
+  const [activePage, setActivePage] = useState(() => getPageFromPath(window.location.pathname));
   const [filters, setFilters] = useState({
     search: '',
     location: '',
     status: '',
   });
 
-  const loadData = async (authToken = token) => {
+  const loadData = async (authToken = token, userRole = currentUser.role) => {
     try {
       setDataError('');
-      const [propertyData, agentData] = await Promise.all([getProperties(authToken), getAgents()]);
+      const [propertyData, userData] = await Promise.all([
+        getProperties(authToken),
+        userRole === 'admin' ? getUsers(authToken) : Promise.resolve([]),
+      ]);
       setPropertyRecords(propertyData.map((property) => ({
         ...property,
         isKiv: Boolean(property.isKiv),
         price: `RM ${Number(property.price).toLocaleString('en-MY')}`,
       })));
-      setAgentRecords(agentData);
+      setUserRecords(userData);
     } catch (requestError) {
       setDataError(requestError.message);
     }
   };
 
   useEffect(() => {
-    loadData(token);
-  }, [token]);
+    loadData(token, currentUser.role);
+  }, [token, currentUser.role]);
+
+  useEffect(() => {
+    const syncPageWithUrl = () => {
+      const pageId = getPageFromPath(window.location.pathname);
+      const targetPage = menuItems.find((item) => item.id === pageId);
+
+      if (currentUser.role === 'public' && pageId !== 'dashboard') {
+        window.history.replaceState({}, '', getPagePath('dashboard'));
+        setActivePage('dashboard');
+        return;
+      }
+
+      if (targetPage?.adminOnly && currentUser.role !== 'admin') {
+        window.history.replaceState({}, '', getPagePath('dashboard'));
+        setActivePage('dashboard');
+        return;
+      }
+
+      if (window.location.pathname !== getPagePath(pageId)) {
+        window.history.replaceState({}, '', getPagePath(pageId));
+      }
+      setActivePage(pageId);
+    };
+
+    window.addEventListener('popstate', syncPageWithUrl);
+    syncPageWithUrl();
+
+    return () => window.removeEventListener('popstate', syncPageWithUrl);
+  }, [currentUser.role]);
 
   useEffect(() => {
     const handleAdminShortcut = (event) => {
@@ -104,12 +137,23 @@ export default function App() {
 
   const handleNavigate = (pageId) => {
     const targetPage = menuItems.find((item) => item.id === pageId);
-    if (targetPage?.adminOnly && currentUser?.role !== 'admin') {
+    if (currentUser?.role === 'public' && pageId !== 'dashboard') {
+      window.history.pushState({}, '', getPagePath('dashboard'));
       setActivePage('dashboard');
       setIsSidebarOpen(false);
       return;
     }
 
+    if (targetPage?.adminOnly && currentUser?.role !== 'admin') {
+      window.history.pushState({}, '', getPagePath('dashboard'));
+      setActivePage('dashboard');
+      setIsSidebarOpen(false);
+      return;
+    }
+
+    if (window.location.pathname !== getPagePath(pageId)) {
+      window.history.pushState({}, '', getPagePath(pageId));
+    }
     setActivePage(pageId);
     setIsSidebarOpen(false);
   };
@@ -117,6 +161,7 @@ export default function App() {
   const handleLogout = () => {
     setCurrentUser(publicUser);
     setToken('');
+    window.history.pushState({}, '', getPagePath('dashboard'));
     setActivePage('dashboard');
     setIsSidebarOpen(false);
     clearFilters();
@@ -134,8 +179,13 @@ export default function App() {
     return result;
   };
 
-  const handleSaveAgent = async (agent) => {
-    await createAgent(token, agent);
+  const handleSaveUser = async (user) => {
+    await createUser(token, user);
+    await loadData();
+  };
+
+  const handleDeleteUser = async (userId) => {
+    await deleteUser(token, userId);
     await loadData();
   };
 
@@ -174,8 +224,14 @@ export default function App() {
     dashboard: <DashboardPage {...pageProps} />,
     'property-listing': <PropertyListingPage {...pageProps} />,
     'add-property': <AddPropertyPage isAdmin={isAdmin} propertyRecords={propertyRecords} onSave={handleSaveProperty} />,
-    agents: <AgentsPage agents={agentRecords} isAdmin={isAdmin} onSave={handleSaveAgent} />,
-    reports: <ReportsPage properties={propertyRecords} />,
+    agents: (
+      <AgentsPage
+        users={userRecords}
+        currentUserId={currentUser.id}
+        onSave={handleSaveUser}
+        onDelete={handleDeleteUser}
+      />
+    ),
     'monthly-installment': <MonthlyInstallmentPage />,
     settings: <SettingsPage isAdmin={isAdmin} />,
   };
@@ -193,7 +249,7 @@ export default function App() {
         onMenuClick={() => setIsSidebarOpen((isOpen) => !isOpen)}
       />
       <main className="mx-auto max-w-7xl px-4 py-8 md:px-6 lg:px-8">
-        {dataError && (
+        {dataError && currentUser.role !== 'public' && (
           <p className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
             Database connection error: {dataError}
           </p>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { login } from '../api.js';
+import { getPagePath } from '../routes.js';
 import {
   Building2,
   BriefcaseBusiness,
@@ -25,25 +26,24 @@ import {
   Trash2,
   Users,
   X,
-  FileBarChart,
 } from 'lucide-react';
 export const menuItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'dashboard', label: 'Home', icon: LayoutDashboard },
   { id: 'property-listing', label: 'Property Listing', icon: Building2 },
   { id: 'add-property', label: 'Add Property', icon: PlusCircle, adminOnly: true },
-  { id: 'agents', label: 'Agents', icon: Users },
-  { id: 'reports', label: 'Reports', icon: FileBarChart },
+  { id: 'agents', label: 'Add Agent', icon: Users, adminOnly: true },
   { id: 'monthly-installment', label: 'Monthly Installment', icon: Calculator },
   { id: 'settings', label: 'Settings', icon: Settings, adminOnly: true },
 ];
 
 export const statusStyles = {
   Available: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  'Not Available': 'bg-slate-100 text-slate-700 ring-slate-300',
   Booked: 'bg-amber-50 text-amber-700 ring-amber-200',
   Sold: 'bg-red-50 text-red-700 ring-red-200',
 };
 
-export const statuses = ['Available', 'Booked', 'Sold'];
+export const statuses = ['Available', 'Not Available'];
 
 export const getFileType = (file, fallbackType = 'application/octet-stream') => {
   if (file.type) return file.type;
@@ -189,7 +189,7 @@ export function AdminLoginDialog({ onClose, onLogin }) {
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 px-4">
-      <button className="absolute inset-0 h-full w-full" onClick={onClose} aria-label="Close admin access" />
+      <button className="absolute inset-0 h-full w-full" onClick={onClose} aria-label="Close sign in" />
       <form onSubmit={handleSubmit} className="relative w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-2xl">
           <div className="mb-6">
             <div className="mb-5 flex items-center gap-3">
@@ -201,8 +201,8 @@ export function AdminLoginDialog({ onClose, onLogin }) {
                 <p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">FLP Agency Partner</p>
               </div>
             </div>
-            <h2 className="text-2xl font-bold text-slate-950">Admin Access</h2>
-            <p className="mt-1 text-sm text-slate-500">Sign in to manage properties and settings.</p>
+            <h2 className="text-2xl font-bold text-slate-950">Portal Sign In</h2>
+            <p className="mt-1 text-sm text-slate-500">Use your admin or agent account to continue.</p>
           </div>
 
           <div className="space-y-4">
@@ -212,7 +212,9 @@ export function AdminLoginDialog({ onClose, onLogin }) {
                 value={credentials.username}
                 onChange={(event) => setCredentials({ ...credentials, username: event.target.value })}
                 className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-                placeholder="admin"
+                placeholder="Username"
+                autoComplete="username"
+                required
               />
             </label>
             <label className="block">
@@ -222,7 +224,9 @@ export function AdminLoginDialog({ onClose, onLogin }) {
                 value={credentials.password}
                 onChange={(event) => setCredentials({ ...credentials, password: event.target.value })}
                 className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-                placeholder="admin123"
+                placeholder="Password"
+                autoComplete="current-password"
+                required
               />
             </label>
           </div>
@@ -233,10 +237,6 @@ export function AdminLoginDialog({ onClose, onLogin }) {
             {isLoading ? 'Signing In...' : 'Sign In'}
           </button>
 
-          <div className="mt-5 rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
-            <p className="font-bold text-slate-950">Admin account</p>
-            <p className="mt-2">Admin: admin / admin123</p>
-          </div>
       </form>
     </div>
   );
@@ -262,7 +262,10 @@ export function TopNav({
   onLogout,
   onMenuClick,
 }) {
-  const visibleMenuItems = menuItems.filter((item) => isAdmin || !item.adminOnly);
+  const isSignedIn = currentUser.role !== 'public';
+  const visibleMenuItems = menuItems.filter((item) => (
+    item.id === 'dashboard' || (isSignedIn && (isAdmin || !item.adminOnly))
+  ));
 
   return (
     <header className="glass-nav sticky top-0 z-30">
@@ -275,8 +278,12 @@ export function TopNav({
           >
             {isMenuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
-          <button
-            onClick={() => onNavigate('dashboard')}
+          <a
+            href={getPagePath('dashboard')}
+            onClick={(event) => {
+              event.preventDefault();
+              onNavigate('dashboard');
+            }}
             className="glass-brand flex min-w-0 items-center gap-2 rounded-full py-1 pl-1 pr-3 text-left transition"
             aria-label="Open dashboard"
           >
@@ -284,33 +291,37 @@ export function TopNav({
               <img className="h-full w-full object-cover" src="/images/logo_infinite.jpeg" alt="Infinite team" />
             </div>
             <span className="truncate text-sm font-semibold text-slate-950">Infinite</span>
-          </button>
+          </a>
         </div>
 
         <nav className="simple-tab-bar hidden items-center justify-center gap-1 lg:flex">
           {visibleMenuItems.map((item) => (
-            <button
+            <a
               key={item.id}
-              onClick={() => onNavigate(item.id)}
-              className={`simple-tab h-10 rounded-full px-5 text-sm font-semibold ${
+              href={getPagePath(item.id)}
+              onClick={(event) => {
+                event.preventDefault();
+                onNavigate(item.id);
+              }}
+              className={`simple-tab inline-flex h-10 items-center rounded-full px-5 text-sm font-semibold ${
                 activePage === item.id
                   ? 'simple-tab-active'
                   : ''
               }`}
             >
               {item.label}
-            </button>
+            </a>
           ))}
         </nav>
 
         <div className="flex items-center justify-end gap-1">
           <button
-            onClick={isAdmin ? onLogout : onAdminAccess}
+            onClick={isSignedIn ? onLogout : onAdminAccess}
             className="glass-icon-button grid h-9 w-9 place-items-center rounded-full text-slate-900 transition"
-            aria-label={isAdmin ? 'Exit admin access' : 'Open admin access'}
-            title={isAdmin ? `Exit ${currentUser.name}` : 'Admin access'}
+            aria-label={isSignedIn ? 'Sign out' : 'Sign in'}
+            title={isSignedIn ? `Sign out ${currentUser.username || currentUser.name}` : 'Portal sign in'}
           >
-            {isAdmin ? <LogOut size={18} /> : <LockKeyhole size={18} />}
+            {isSignedIn ? <LogOut size={18} /> : <LockKeyhole size={18} />}
           </button>
         </div>
       </div>
@@ -320,9 +331,13 @@ export function TopNav({
             {visibleMenuItems.map((item) => {
               const Icon = item.icon;
               return (
-                <button
+                <a
                   key={item.id}
-                  onClick={() => onNavigate(item.id)}
+                  href={getPagePath(item.id)}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    onNavigate(item.id);
+                  }}
                   className={`simple-tab flex h-11 items-center gap-3 rounded-full px-4 text-left text-sm font-semibold ${
                     activePage === item.id
                       ? 'simple-tab-active'
@@ -331,7 +346,7 @@ export function TopNav({
                 >
                   <Icon size={18} />
                   {item.label}
-                </button>
+                </a>
               );
             })}
           </nav>
@@ -503,39 +518,9 @@ export function MalaysiaLocationInput({
 }
 
 export function Filters({ filters, locations, onFilterChange, onClearFilters, resultCount }) {
-  const [activeMode, setActiveMode] = useState('Buy');
-  const popularLocations = (locations.length ? locations : malaysiaLocationOptions).slice(0, 5);
-
   return (
-    <section className="relative z-20 overflow-hidden rounded-lg border border-white/60 bg-white/25 p-3 shadow-[0_24px_70px_rgba(15,23,42,0.18)] ring-1 ring-white/40 backdrop-blur-2xl backdrop-saturate-150 before:absolute before:inset-x-4 before:top-0 before:h-px before:bg-white/80 after:absolute after:-bottom-16 after:left-12 after:h-32 after:w-64 after:rounded-full after:bg-sky-100/30 after:blur-3xl">
-      <div className="relative z-10 grid grid-cols-3 overflow-hidden rounded-lg border border-white/30 bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.54)]">
-        {[
-          { label: 'Buy', icon: Building2 },
-          { label: 'Rent', icon: CircleDollarSign },
-          { label: 'Invest', icon: BriefcaseBusiness },
-        ].map((mode) => {
-          const Icon = mode.icon;
-          const isActive = activeMode === mode.label;
-
-          return (
-            <button
-              key={mode.label}
-              type="button"
-              onClick={() => setActiveMode(mode.label)}
-              className={`inline-flex h-14 items-center justify-center gap-2 border-r border-white/30 text-sm font-bold transition last:border-r-0 ${
-                isActive
-                  ? 'bg-white/30 text-slate-950 shadow-[inset_0_-1px_0_rgba(255,255,255,0.58)]'
-                  : 'text-stone-600 hover:bg-white/20 hover:text-slate-900'
-              }`}
-            >
-              <Icon size={17} className={isActive ? 'text-amber-700' : 'text-amber-600/70'} />
-              {mode.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="relative z-10 mt-3 grid gap-3 md:grid-cols-[1.2fr_1fr_1fr_auto_auto]">
+    <section className="relative z-20 overflow-visible rounded-lg border border-white/60 bg-white/25 p-3 shadow-[0_24px_70px_rgba(15,23,42,0.18)] ring-1 ring-white/40 backdrop-blur-2xl backdrop-saturate-150 before:absolute before:inset-x-4 before:top-0 before:h-px before:bg-white/80">
+      <div className="relative z-10 grid gap-3 md:grid-cols-[1.2fr_1fr_1fr_auto_auto]">
         <label className="relative block min-w-0">
           <MapPin className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-stone-500" size={18} />
           <MalaysiaLocationInput
@@ -588,24 +573,7 @@ export function Filters({ filters, locations, onFilterChange, onClearFilters, re
         </button>
       </div>
 
-      <div className="relative z-10 mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-bold text-stone-600">Popular:</span>
-          {popularLocations.map((location) => (
-            <button
-              key={location}
-              type="button"
-              onClick={() => onFilterChange('location', location)}
-              className={`rounded-full border px-4 py-1.5 text-xs font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.62)] transition ${
-                filters.location === location
-                  ? 'border-amber-300 bg-amber-100/70 text-amber-800'
-                  : 'border-white/40 bg-white/30 text-amber-800/80 hover:bg-white/50'
-              }`}
-            >
-              {location}
-            </button>
-          ))}
-        </div>
+      <div className="relative z-10 mt-3 flex justify-end">
         <p className="shrink-0 text-sm font-bold text-stone-600">{resultCount} properties found</p>
       </div>
     </section>
@@ -958,31 +926,33 @@ export function KivPropertyDialog({ property, onClose, onSave }) {
 }
 
 export function EditPropertyDialog({ property, locations = [], onClose, onSave }) {
-  let savedCalculator = defaultSalesCalculator;
+  let savedCalculators = [defaultSalesCalculator];
   try {
-    savedCalculator = normalizeSalesCalculator(property.salesPackageCalculator) || defaultSalesCalculator;
+    savedCalculators = normalizeSalesCalculators(property.salesPackageCalculator);
+    if (!savedCalculators.length) savedCalculators = [defaultSalesCalculator];
   } catch {
-    savedCalculator = defaultSalesCalculator;
+    savedCalculators = [defaultSalesCalculator];
   }
 
   const [form, setForm] = useState({
     name: property.name || '',
     location: property.location || '',
     price: String(property.price || '').replace(/[^\d.]/g, ''),
-    status: property.status || 'Available',
+    status: statuses.includes(property.status) ? property.status : 'Not Available',
     developer: property.agent || '',
     image: property.image || '',
-    notes: property.notes || '',
+    remarks: property.remarks || '',
   });
   const [message, setMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [projectImages, setProjectImages] = useState([]);
   const [salesPackages, setSalesPackages] = useState([]);
-  const [salesCalculator, setSalesCalculator] = useState(() => JSON.parse(JSON.stringify(savedCalculator)));
+  const [salesCalculator, setSalesCalculator] = useState(() => JSON.parse(JSON.stringify(savedCalculators[0])));
   const projectImagesInput = useRef(null);
   const salesPackageInput = useRef(null);
   const updateField = (field, value) => setForm((current) => ({ ...current, [field]: value }));
   const salesCalculatorResults = getSalesCalculatorResults(salesCalculator);
+  const buyerTypes = getSalesCalculatorBuyerTypes(salesCalculator);
   const updateSalesCalculator = (field, value) => {
     setSalesCalculator((current) => ({ ...current, [field]: value }));
   };
@@ -1013,13 +983,39 @@ export function EditPropertyDialog({ property, locations = [], onClose, onSave }
   const addRebateRow = () => {
     setSalesCalculator((current) => ({
       ...current,
-      rebateRows: [...current.rebateRows, createSalesCalculatorRow()],
+      rebateRows: [...current.rebateRows, createSalesCalculatorRow(current.buyerTypes)],
     }));
   };
   const removeRebateRow = (rowId) => {
     setSalesCalculator((current) => ({
       ...current,
       rebateRows: current.rebateRows.filter((row) => row.id !== rowId),
+    }));
+  };
+  const addBuyerType = () => {
+    const buyerType = createSalesCalculatorBuyerType();
+    setSalesCalculator((current) => ({
+      ...current,
+      buyerTypes: [...getSalesCalculatorBuyerTypes(current), buyerType],
+      spaPrices: { ...current.spaPrices, [buyerType.id]: '' },
+      rebateRows: current.rebateRows.map((row) => ({
+        ...row,
+        values: { ...row.values, [buyerType.id]: '' },
+      })),
+    }));
+  };
+  const updateBuyerType = (buyerTypeId, label) => {
+    setSalesCalculator((current) => ({
+      ...current,
+      buyerTypes: getSalesCalculatorBuyerTypes(current).map((buyerType) => (
+        buyerType.id === buyerTypeId ? { ...buyerType, label } : buyerType
+      )),
+    }));
+  };
+  const removeBuyerType = (buyerTypeId) => {
+    setSalesCalculator((current) => ({
+      ...current,
+      buyerTypes: getSalesCalculatorBuyerTypes(current).filter((buyerType) => buyerType.id !== buyerTypeId),
     }));
   };
 
@@ -1068,7 +1064,7 @@ export function EditPropertyDialog({ property, locations = [], onClose, onSave }
       const result = await onSave(property.id, {
         ...form,
         agent: form.developer,
-        salesPackageCalculator: salesCalculator,
+        salesPackageCalculator: [salesCalculator, ...savedCalculators.slice(1)],
         ...(projectImages.length ? { projectImages: projectImageData, replaceProjectImages: true } : {}),
         ...(salesPackages.length ? { salesPackages: salesPackageData, replaceSalesPackages: true } : {}),
       });
@@ -1156,15 +1152,6 @@ export function EditPropertyDialog({ property, locations = [], onClose, onSave }
             />
           </label>
           <label className="block md:col-span-2">
-            <span className="text-sm font-bold text-slate-700">Legacy Image URL</span>
-            <input
-              value={form.image}
-              onChange={(event) => updateField('image', event.target.value)}
-              className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-              placeholder="https://..."
-            />
-          </label>
-          <label className="block md:col-span-2">
             <span className="text-sm font-bold text-slate-700">Project Images</span>
             {property.projectImages?.length ? (
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
@@ -1228,10 +1215,10 @@ export function EditPropertyDialog({ property, locations = [], onClose, onSave }
           <label className="block md:col-span-2">
             <span className="text-sm font-bold text-slate-700">Notes</span>
             <textarea
-              value={form.notes}
-              onChange={(event) => updateField('notes', event.target.value)}
-              className="mt-2 min-h-24 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-              placeholder="Internal notes"
+              value={form.remarks}
+              onChange={(event) => updateField('remarks', event.target.value)}
+              className="mt-2 min-h-48 w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+              placeholder="Add any project notes. Full web links become clickable in Property Details."
             />
           </label>
           <section className="md:col-span-2 rounded-lg border border-amber-200 bg-amber-50/50 p-5">
@@ -1257,29 +1244,43 @@ export function EditPropertyDialog({ property, locations = [], onClose, onSave }
             </div>
 
             <div className="mt-5 overflow-x-auto rounded-lg border border-amber-200 bg-white">
-              <table className="min-w-[960px] w-full border-collapse text-sm">
+              <table className="min-w-[720px] w-full border-collapse text-sm">
                 <thead>
-                  <tr className="border-b border-amber-200 text-center">
-                    <th className="w-64 bg-white px-3 py-2 text-left text-xs font-bold uppercase text-slate-500">Lot Type</th>
-                    <th colSpan="2" className="bg-emerald-100 px-3 py-2 font-bold text-emerald-950">Intermediate Lot</th>
-                    <th colSpan="2" className="bg-sky-100 px-3 py-2 font-bold text-sky-950">End Lot</th>
-                  </tr>
                   <tr className="border-b border-amber-200 text-center text-xs font-bold text-slate-600">
-                    <th className="bg-white px-3 py-2 text-left">Buyer Type</th>
-                    {salesPackageColumns.map((column) => (
-                      <th key={column.id} className="px-3 py-2">{column.buyer}</th>
+                    <th className="w-64 bg-white px-3 py-2 text-left">Buyer Type</th>
+                    {buyerTypes.map((buyerType) => (
+                      <th key={buyerType.id} className="bg-emerald-100 px-2 py-2">
+                        <div className="flex min-w-40 items-center gap-2">
+                          <input
+                            value={buyerType.label}
+                            onChange={(event) => updateBuyerType(buyerType.id, event.target.value)}
+                            className="h-9 w-full rounded-md border border-emerald-200 bg-white px-2 text-center text-xs font-bold text-emerald-950 outline-none focus:border-emerald-500"
+                            placeholder="Buyer type"
+                            aria-label="Buyer type name"
+                          />
+                          <button
+                            disabled={buyerTypes.length === 1}
+                            type="button"
+                            onClick={() => removeBuyerType(buyerType.id)}
+                            className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-emerald-200 bg-white text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                            aria-label={`Remove ${buyerType.label || 'buyer type'}`}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   <tr className="border-b border-slate-200">
                     <td className="px-3 py-2 font-bold text-slate-700">SPA Price</td>
-                    {salesPackageColumns.map((column) => (
-                      <td key={column.id} className="px-2 py-2">
+                    {buyerTypes.map((buyerType) => (
+                      <td key={buyerType.id} className="px-2 py-2">
                         <input
                           type="number"
-                          value={salesCalculator.spaPrices[column.id]}
-                          onChange={(event) => updateSalesCalculatorColumn('spaPrices', column.id, event.target.value)}
+                          value={salesCalculator.spaPrices[buyerType.id] || ''}
+                          onChange={(event) => updateSalesCalculatorColumn('spaPrices', buyerType.id, event.target.value)}
                           className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 px-2 text-right text-xs font-semibold outline-none focus:border-emerald-400 focus:bg-white"
                         />
                       </td>
@@ -1315,17 +1316,17 @@ export function EditPropertyDialog({ property, locations = [], onClose, onSave }
                           </button>
                         </div>
                       </td>
-                      {salesPackageColumns.map((column) => {
-                        const rowValue = toAmount(row.values[column.id]);
-                        const rowAmount = salesCalculatorResults[column.id].rebates[row.id];
+                      {buyerTypes.map((buyerType) => {
+                        const rowValue = toAmount(row.values?.[buyerType.id]);
+                        const rowAmount = salesCalculatorResults[buyerType.id].rebates[row.id];
                         return (
-                          <td key={column.id} className="px-2 py-2">
+                          <td key={buyerType.id} className="px-2 py-2">
                             <div className="grid grid-cols-[4.5rem_1fr] items-center gap-2">
                               <input
                                 type="number"
                                 step="0.01"
-                                value={row.values[column.id]}
-                                onChange={(event) => updateRebateRow(row.id, column.id, event.target.value)}
+                                value={row.values?.[buyerType.id] || ''}
+                                onChange={(event) => updateRebateRow(row.id, buyerType.id, event.target.value)}
                                 className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 px-2 text-right text-xs font-semibold outline-none focus:border-emerald-400 focus:bg-white"
                               />
                               <span className="text-right text-xs font-semibold text-slate-700">
@@ -1339,24 +1340,32 @@ export function EditPropertyDialog({ property, locations = [], onClose, onSave }
                   ))}
                   <tr className="border-b border-slate-200 bg-slate-50">
                     <td className="px-3 py-2 font-bold text-slate-950">Total Rebates</td>
-                    {salesPackageColumns.map((column) => (
-                      <td key={column.id} className="px-3 py-2 text-right font-bold text-slate-950">
-                        {formatMoney(salesCalculatorResults[column.id].totalRebates)}
+                    {buyerTypes.map((buyerType) => (
+                      <td key={buyerType.id} className="px-3 py-2 text-right font-bold text-slate-950">
+                        {formatMoney(salesCalculatorResults[buyerType.id].totalRebates)}
                       </td>
                     ))}
                   </tr>
                   <tr className="bg-emerald-50">
                     <td className="px-3 py-3 font-bold text-emerald-950">Net to Buyer Price</td>
-                    {salesPackageColumns.map((column) => (
-                      <td key={column.id} className="px-3 py-3 text-right font-bold text-emerald-950">
-                        {formatMoney(salesCalculatorResults[column.id].netBuyerPrice)}
+                    {buyerTypes.map((buyerType) => (
+                      <td key={buyerType.id} className="px-3 py-3 text-right font-bold text-emerald-950">
+                        {formatMoney(salesCalculatorResults[buyerType.id].netBuyerPrice)}
                       </td>
                     ))}
                   </tr>
                 </tbody>
               </table>
             </div>
-            <div className="mt-3 flex justify-start">
+            <div className="mt-3 flex flex-wrap justify-start gap-2">
+              <button
+                type="button"
+                onClick={addBuyerType}
+                className="inline-flex h-10 items-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 text-sm font-bold text-slate-700 transition hover:border-emerald-400 hover:text-emerald-700"
+              >
+                <PlusCircle size={16} />
+                Add Buyer Type
+              </button>
               <button
                 type="button"
                 onClick={addRebateRow}
@@ -1416,7 +1425,7 @@ export function ProjectImagePreviews({ images }) {
   );
 }
 
-export const salesPackageColumns = [
+const legacySalesPackageColumns = [
   { id: 'intermediateBumi', lot: 'Intermediate Lot', buyer: 'Bumi' },
   { id: 'intermediateNonBumi', lot: 'Intermediate Lot', buyer: 'Non-Bumi' },
   { id: 'endBumi', lot: 'End Lot', buyer: 'Bumi' },
@@ -1425,46 +1434,62 @@ export const salesPackageColumns = [
 
 export const defaultSalesCalculator = {
   simulationName: '20x60',
+  buyerTypes: [
+    { id: 'bumi', label: 'Bumi' },
+    { id: 'nonBumi', label: 'Non-Bumi' },
+  ],
   spaPrices: {
-    intermediateBumi: '682800',
-    intermediateNonBumi: '682800',
-    endBumi: '791800',
-    endNonBumi: '791800',
+    bumi: '682800',
+    nonBumi: '682800',
   },
   rebateRows: [
     {
       id: 'bumiRebate',
       label: 'Bumi Rebate',
       type: 'percent',
-      values: { intermediateBumi: '7', intermediateNonBumi: '', endBumi: '7', endNonBumi: '' },
+      values: { bumi: '7', nonBumi: '' },
     },
     {
       id: 'rebate',
       label: 'Rebate',
       type: 'percent',
-      values: { intermediateBumi: '13', intermediateNonBumi: '13', endBumi: '12', endNonBumi: '12' },
+      values: { bumi: '13', nonBumi: '13' },
     },
     {
       id: 'conditionalRebate',
       label: 'Conditional Rebate',
       type: 'percent',
-      values: { intermediateBumi: '3', intermediateNonBumi: '3', endBumi: '1', endNonBumi: '1' },
+      values: { bumi: '3', nonBumi: '3' },
     },
     {
       id: 'conversionIncentive',
       label: 'Conversion Incentive',
       type: 'amount',
-      values: { intermediateBumi: '', intermediateNonBumi: '', endBumi: '5000', endNonBumi: '5000' },
+      values: { bumi: '', nonBumi: '' },
     },
   ],
 };
 
-export const createSalesCalculatorRow = () => ({
+export const createSalesCalculatorRow = (buyerTypes = defaultSalesCalculator.buyerTypes) => ({
   id: `custom-${Date.now()}`,
   label: '',
   type: 'percent',
-  values: salesPackageColumns.reduce((values, column) => ({ ...values, [column.id]: '' }), {}),
+  values: buyerTypes.reduce((values, buyerType) => ({ ...values, [buyerType.id]: '' }), {}),
 });
+
+export const createSalesCalculatorBuyerType = () => ({
+  id: `buyer-${Date.now()}`,
+  label: '',
+});
+
+export const getSalesCalculatorBuyerTypes = (calculator) => (
+  Array.isArray(calculator?.buyerTypes) && calculator.buyerTypes.length
+    ? calculator.buyerTypes
+    : legacySalesPackageColumns.map((column) => ({
+      id: column.id,
+      label: `${column.lot} - ${column.buyer}`,
+    }))
+);
 
 export const toAmount = (value) => {
   const amount = Number(String(value || '').replace(/,/g, ''));
@@ -1479,13 +1504,13 @@ export const formatMoney = (value, decimals = 2) => (
 );
 
 export const getSalesCalculatorResults = (calculator) => (
-  salesPackageColumns.reduce((results, column) => {
-    const spaPrice = toAmount(calculator.spaPrices[column.id]);
+  getSalesCalculatorBuyerTypes(calculator).reduce((results, buyerType) => {
+    const spaPrice = toAmount(calculator.spaPrices[buyerType.id]);
     let remainingPrice = spaPrice;
     let totalRebates = 0;
 
     const rebates = calculator.rebateRows.reduce((rowResults, row) => {
-      const rowValue = toAmount(row.values[column.id]);
+      const rowValue = toAmount(row.values?.[buyerType.id]);
       const rebateAmount = row.type === 'percent' ? remainingPrice * (rowValue / 100) : rowValue;
       remainingPrice -= rebateAmount;
       totalRebates += rebateAmount;
@@ -1494,7 +1519,7 @@ export const getSalesCalculatorResults = (calculator) => (
 
     return {
       ...results,
-      [column.id]: {
+      [buyerType.id]: {
         spaPrice,
         rebates,
         totalRebates,
@@ -1504,27 +1529,34 @@ export const getSalesCalculatorResults = (calculator) => (
   }, {})
 );
 
-export const normalizeSalesCalculator = (calculator) => {
-  if (!calculator) return null;
+export const normalizeSalesCalculators = (calculator) => {
+  if (!calculator) return [];
 
   const parsedCalculator = typeof calculator === 'string' ? JSON.parse(calculator) : calculator;
-  if (!parsedCalculator?.spaPrices || !Array.isArray(parsedCalculator.rebateRows)) {
-    return null;
-  }
+  const calculators = Array.isArray(parsedCalculator)
+    ? parsedCalculator
+    : (Array.isArray(parsedCalculator?.calculators) ? parsedCalculator.calculators : [parsedCalculator]);
 
-  return parsedCalculator;
+  return calculators
+    .filter((item) => item?.spaPrices && Array.isArray(item.rebateRows))
+    .map((item) => ({
+      ...item,
+      buyerTypes: getSalesCalculatorBuyerTypes(item),
+    }));
 };
 
+export const normalizeSalesCalculator = (calculator) => normalizeSalesCalculators(calculator)[0] || null;
+
 export function SalesPackageCalculatorSummary({ calculator }) {
-  let salesCalculator = null;
+  let salesCalculators = [];
 
   try {
-    salesCalculator = normalizeSalesCalculator(calculator);
+    salesCalculators = normalizeSalesCalculators(calculator);
   } catch {
-    salesCalculator = null;
+    salesCalculators = [];
   }
 
-  if (!salesCalculator) {
+  if (!salesCalculators.length) {
     return (
       <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center">
         <p className="text-sm font-bold text-slate-700">No sales package calculator saved</p>
@@ -1532,32 +1564,32 @@ export function SalesPackageCalculatorSummary({ calculator }) {
     );
   }
 
-  const results = getSalesCalculatorResults(salesCalculator);
-
   return (
-    <div className="overflow-x-auto rounded-lg border border-amber-200 bg-white">
-      <table className="min-w-[900px] w-full border-collapse text-sm">
+    <div className="space-y-4">
+      {salesCalculators.map((salesCalculator, calculatorIndex) => {
+        const results = getSalesCalculatorResults(salesCalculator);
+        const buyerTypes = getSalesCalculatorBuyerTypes(salesCalculator);
+        return (
+    <div key={salesCalculator.calculatorId || calculatorIndex} className="overflow-x-auto rounded-lg border border-amber-200 bg-white">
+      <table className="min-w-[720px] w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-amber-200 text-center">
             <th className="w-56 bg-white px-3 py-2 text-left text-xs font-bold uppercase text-slate-500">
               {salesCalculator.simulationName || 'Simulation'}
             </th>
-            <th colSpan="2" className="bg-emerald-100 px-3 py-2 font-bold text-emerald-950">Intermediate Lot</th>
-            <th colSpan="2" className="bg-sky-100 px-3 py-2 font-bold text-sky-950">End Lot</th>
-          </tr>
-          <tr className="border-b border-amber-200 text-center text-xs font-bold text-slate-600">
-            <th className="bg-white px-3 py-2 text-left">Buyer Type</th>
-            {salesPackageColumns.map((column) => (
-              <th key={column.id} className="px-3 py-2">{column.buyer}</th>
+            {buyerTypes.map((buyerType) => (
+              <th key={buyerType.id} className="bg-emerald-100 px-3 py-2 font-bold text-emerald-950">
+                {buyerType.label || 'Buyer Type'}
+              </th>
             ))}
           </tr>
         </thead>
         <tbody>
           <tr className="border-b border-slate-200">
             <td className="px-3 py-2 font-bold text-slate-700">SPA Price</td>
-            {salesPackageColumns.map((column) => (
-              <td key={column.id} className="px-3 py-2 text-right font-bold text-slate-800">
-                {formatMoney(results[column.id].spaPrice)}
+            {buyerTypes.map((buyerType) => (
+              <td key={buyerType.id} className="px-3 py-2 text-right font-bold text-slate-800">
+                {formatMoney(results[buyerType.id].spaPrice)}
               </td>
             ))}
           </tr>
@@ -1567,11 +1599,11 @@ export function SalesPackageCalculatorSummary({ calculator }) {
                 {row.label || 'Selection'}
                 <span className="ml-2 text-xs font-semibold text-slate-400">{row.type === 'percent' ? '%' : 'RM'}</span>
               </td>
-              {salesPackageColumns.map((column) => {
-                const rowValue = toAmount(row.values?.[column.id]);
+              {buyerTypes.map((buyerType) => {
+                const rowValue = toAmount(row.values?.[buyerType.id]);
                 return (
-                  <td key={column.id} className="px-3 py-2 text-right text-slate-700">
-                    {rowValue ? formatMoney(results[column.id].rebates[row.id]) : '-'}
+                  <td key={buyerType.id} className="px-3 py-2 text-right text-slate-700">
+                    {rowValue ? formatMoney(results[buyerType.id].rebates[row.id]) : '-'}
                   </td>
                 );
               })}
@@ -1579,24 +1611,54 @@ export function SalesPackageCalculatorSummary({ calculator }) {
           ))}
           <tr className="border-b border-slate-200 bg-slate-50">
             <td className="px-3 py-2 font-bold text-slate-950">Total Rebates</td>
-            {salesPackageColumns.map((column) => (
-              <td key={column.id} className="px-3 py-2 text-right font-bold text-slate-950">
-                {formatMoney(results[column.id].totalRebates)}
+            {buyerTypes.map((buyerType) => (
+              <td key={buyerType.id} className="px-3 py-2 text-right font-bold text-slate-950">
+                {formatMoney(results[buyerType.id].totalRebates)}
               </td>
             ))}
           </tr>
           <tr className="bg-emerald-50">
             <td className="px-3 py-3 font-bold text-emerald-950">Net to Buyer Price</td>
-            {salesPackageColumns.map((column) => (
-              <td key={column.id} className="px-3 py-3 text-right font-bold text-emerald-950">
-                {formatMoney(results[column.id].netBuyerPrice)}
+            {buyerTypes.map((buyerType) => (
+              <td key={buyerType.id} className="px-3 py-3 text-right font-bold text-emerald-950">
+                {formatMoney(results[buyerType.id].netBuyerPrice)}
               </td>
             ))}
           </tr>
         </tbody>
       </table>
     </div>
+        );
+      })}
+    </div>
   );
+}
+
+function RemarksWithLinks({ text }) {
+  const parts = String(text).split(/(https?:\/\/[^\s]+|www\.[^\s]+)/gi);
+
+  return parts.map((part, index) => {
+    if (!/^(https?:\/\/|www\.)/i.test(part)) return part;
+
+    const match = part.match(/^(.*?)([),.;!?]*)$/);
+    const url = match?.[1] || part;
+    const trailingPunctuation = match?.[2] || '';
+    const href = /^www\./i.test(url) ? `https://${url}` : url;
+
+    return (
+      <span key={`${url}-${index}`}>
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-semibold text-emerald-700 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-600"
+        >
+          {url}
+        </a>
+        {trailingPunctuation}
+      </span>
+    );
+  });
 }
 
 export function PropertyDetailsDialog({ property, onClose }) {
@@ -1680,6 +1742,15 @@ export function PropertyDetailsDialog({ property, onClose }) {
               )}
             </div>
           </section>
+
+          {property.remarks?.trim() && (
+            <section className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-4">
+              <h3 className="text-lg font-bold text-slate-950">Notes</h3>
+              <div className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
+                <RemarksWithLinks text={property.remarks} />
+              </div>
+            </section>
+          )}
 
           <section>
             <div className="mb-3 flex items-center gap-2">

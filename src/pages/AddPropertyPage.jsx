@@ -2,18 +2,25 @@ import { useRef, useState } from 'react';
 import { CircleDollarSign, PlusCircle, Trash2 } from 'lucide-react';
 import {
   createSalesCalculatorRow,
+  createSalesCalculatorBuyerType,
   defaultSalesCalculator,
   formatMoney,
   getFileType,
   getSalesCalculatorResults,
+  getSalesCalculatorBuyerTypes,
   MalaysiaLocationInput,
   PageHeader,
   PermissionNotice,
   ProjectImagePreviews,
-  salesPackageColumns,
   statuses,
   toAmount,
 } from '../components/shared.jsx';
+
+const createSalesCalculator = () => ({
+  ...JSON.parse(JSON.stringify(defaultSalesCalculator)),
+  calculatorId: `calculator-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+});
+
 export default function AddPropertyPage({ isAdmin, onSave, propertyRecords = [] }) {
   const [form, setForm] = useState({
     name: '',
@@ -21,37 +28,42 @@ export default function AddPropertyPage({ isAdmin, onSave, propertyRecords = [] 
     price: '',
     status: 'Available',
     developer: '',
+    remarks: '',
   });
   const [message, setMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [salesPackages, setSalesPackages] = useState([]);
   const [projectImages, setProjectImages] = useState([]);
-  const [salesCalculator, setSalesCalculator] = useState(defaultSalesCalculator);
+  const [salesCalculators, setSalesCalculators] = useState(() => [createSalesCalculator()]);
   const salesPackageInput = useRef(null);
   const projectImagesInput = useRef(null);
   const locations = propertyRecords.map((property) => property.location);
 
   const updateField = (field, value) => setForm((current) => ({ ...current, [field]: value }));
-  const salesCalculatorResults = getSalesCalculatorResults(salesCalculator);
-  const updateSalesCalculator = (field, value) => {
-    setSalesCalculator((current) => ({ ...current, [field]: value }));
+  const updateCalculatorAt = (calculatorIndex, updater) => {
+    setSalesCalculators((current) => current.map((calculator, index) => (
+      index === calculatorIndex ? updater(calculator) : calculator
+    )));
   };
-  const updateSalesCalculatorColumn = (group, column, value) => {
-    setSalesCalculator((current) => ({
+  const updateSalesCalculator = (calculatorIndex, field, value) => {
+    updateCalculatorAt(calculatorIndex, (current) => ({ ...current, [field]: value }));
+  };
+  const updateSalesCalculatorColumn = (calculatorIndex, group, column, value) => {
+    updateCalculatorAt(calculatorIndex, (current) => ({
       ...current,
       [group]: { ...current[group], [column]: value },
     }));
   };
-  const updateRebateRowMeta = (rowId, field, value) => {
-    setSalesCalculator((current) => ({
+  const updateRebateRowMeta = (calculatorIndex, rowId, field, value) => {
+    updateCalculatorAt(calculatorIndex, (current) => ({
       ...current,
       rebateRows: current.rebateRows.map((row) => (
         row.id === rowId ? { ...row, [field]: value } : row
       )),
     }));
   };
-  const updateRebateRow = (rowId, field, value) => {
-    setSalesCalculator((current) => ({
+  const updateRebateRow = (calculatorIndex, rowId, field, value) => {
+    updateCalculatorAt(calculatorIndex, (current) => ({
       ...current,
       rebateRows: current.rebateRows.map((row) => (
         row.id === rowId
@@ -60,17 +72,49 @@ export default function AddPropertyPage({ isAdmin, onSave, propertyRecords = [] 
       )),
     }));
   };
-  const addRebateRow = () => {
-    setSalesCalculator((current) => ({
+  const addRebateRow = (calculatorIndex) => {
+    updateCalculatorAt(calculatorIndex, (current) => ({
       ...current,
-      rebateRows: [...current.rebateRows, createSalesCalculatorRow()],
+      rebateRows: [...current.rebateRows, createSalesCalculatorRow(current.buyerTypes)],
     }));
   };
-  const removeRebateRow = (rowId) => {
-    setSalesCalculator((current) => ({
+  const addBuyerType = (calculatorIndex) => {
+    const buyerType = createSalesCalculatorBuyerType();
+    updateCalculatorAt(calculatorIndex, (current) => ({
+      ...current,
+      buyerTypes: [...getSalesCalculatorBuyerTypes(current), buyerType],
+      spaPrices: { ...current.spaPrices, [buyerType.id]: '' },
+      rebateRows: current.rebateRows.map((row) => ({
+        ...row,
+        values: { ...row.values, [buyerType.id]: '' },
+      })),
+    }));
+  };
+  const updateBuyerType = (calculatorIndex, buyerTypeId, label) => {
+    updateCalculatorAt(calculatorIndex, (current) => ({
+      ...current,
+      buyerTypes: getSalesCalculatorBuyerTypes(current).map((buyerType) => (
+        buyerType.id === buyerTypeId ? { ...buyerType, label } : buyerType
+      )),
+    }));
+  };
+  const removeBuyerType = (calculatorIndex, buyerTypeId) => {
+    updateCalculatorAt(calculatorIndex, (current) => ({
+      ...current,
+      buyerTypes: getSalesCalculatorBuyerTypes(current).filter((buyerType) => buyerType.id !== buyerTypeId),
+    }));
+  };
+  const removeRebateRow = (calculatorIndex, rowId) => {
+    updateCalculatorAt(calculatorIndex, (current) => ({
       ...current,
       rebateRows: current.rebateRows.filter((row) => row.id !== rowId),
     }));
+  };
+  const addSalesCalculator = () => {
+    setSalesCalculators((current) => [...current, createSalesCalculator()]);
+  };
+  const removeSalesCalculator = (calculatorIndex) => {
+    setSalesCalculators((current) => current.filter((_, index) => index !== calculatorIndex));
   };
 
   const handleSubmit = async (event) => {
@@ -129,11 +173,12 @@ export default function AddPropertyPage({ isAdmin, onSave, propertyRecords = [] 
         agent: form.developer,
         projectImages: projectImageData,
         salesPackages: salesPackageData,
-        salesPackageCalculator: salesCalculator,
+        salesPackageCalculator: salesCalculators,
       });
-      setForm({ name: '', location: '', price: '', status: 'Available', developer: '' });
+      setForm({ name: '', location: '', price: '', status: 'Available', developer: '', remarks: '' });
       setSalesPackages([]);
       setProjectImages([]);
+      setSalesCalculators([createSalesCalculator()]);
       if (salesPackageInput.current) salesPackageInput.current.value = '';
       if (projectImagesInput.current) projectImagesInput.current.value = '';
       setMessage('Property saved successfully.');
@@ -214,6 +259,17 @@ export default function AddPropertyPage({ isAdmin, onSave, propertyRecords = [] 
             />
           </label>
           <label className="block md:col-span-2">
+            <span className="text-sm font-bold text-slate-700">Notes</span>
+            <textarea
+              disabled={!isAdmin}
+              value={form.remarks}
+              onChange={(event) => updateField('remarks', event.target.value)}
+              className="mt-2 min-h-48 w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 outline-none disabled:cursor-not-allowed disabled:text-slate-400 focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+              placeholder="Add any project notes here. Paste a full web link (https://...) to make it clickable in Property Details."
+            />
+            <span className="mt-1 block text-xs text-slate-500">Notes are only shown after an agent opens Property Details.</span>
+          </label>
+          <label className="block md:col-span-2">
             <span className="text-sm font-bold text-slate-700">Project Images</span>
             <input
               ref={projectImagesInput}
@@ -245,14 +301,20 @@ export default function AddPropertyPage({ isAdmin, onSave, propertyRecords = [] 
               </ul>
             )}
           </label>
-          <section className="md:col-span-2 rounded-lg border border-amber-200 bg-amber-50/50 p-5">
+          {salesCalculators.map((salesCalculator, calculatorIndex) => {
+            const salesCalculatorResults = getSalesCalculatorResults(salesCalculator);
+            const buyerTypes = getSalesCalculatorBuyerTypes(salesCalculator);
+            return (
+          <section key={salesCalculator.calculatorId || calculatorIndex} className="md:col-span-2 rounded-lg border border-amber-200 bg-amber-50/50 p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="flex items-start gap-3">
                 <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-amber-100 text-amber-700">
                   <CircleDollarSign size={22} />
                 </div>
                 <div>
-                  <h2 className="font-bold text-slate-950">Sales Package Calculator</h2>
+                  <h2 className="font-bold text-slate-950">
+                    Sales Package Calculator {salesCalculators.length > 1 ? calculatorIndex + 1 : ''}
+                  </h2>
                   <p className="mt-1 text-sm text-slate-600">
                     Build the package from SPA price and your own rebate or incentive selections.
                   </p>
@@ -264,39 +326,65 @@ export default function AddPropertyPage({ isAdmin, onSave, propertyRecords = [] 
                   <input
                     disabled={!isAdmin}
                     value={salesCalculator.simulationName}
-                    onChange={(event) => updateSalesCalculator('simulationName', event.target.value)}
+                    onChange={(event) => updateSalesCalculator(calculatorIndex, 'simulationName', event.target.value)}
                     className="mt-2 h-10 w-full rounded-lg border border-amber-200 bg-white px-3 text-sm font-semibold outline-none disabled:cursor-not-allowed disabled:text-slate-400 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
                     placeholder="20x60"
                   />
                 </label>
+                {salesCalculators.length > 1 && (
+                  <button
+                    disabled={!isAdmin}
+                    type="button"
+                    onClick={() => removeSalesCalculator(calculatorIndex)}
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-3 text-xs font-bold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Trash2 size={14} />
+                    Remove Calculator
+                  </button>
+                )}
               </div>
             </div>
 
             <div className="mt-5 overflow-x-auto rounded-lg border border-amber-200 bg-white">
-              <table className="min-w-[960px] w-full border-collapse text-sm">
+              <table className="min-w-[720px] w-full border-collapse text-sm">
                 <thead>
-                  <tr className="border-b border-amber-200 text-center">
-                    <th className="w-64 bg-white px-3 py-2 text-left text-xs font-bold uppercase text-slate-500">Lot Type</th>
-                    <th colSpan="2" className="bg-emerald-100 px-3 py-2 font-bold text-emerald-950">Intermediate Lot</th>
-                    <th colSpan="2" className="bg-sky-100 px-3 py-2 font-bold text-sky-950">End Lot</th>
-                  </tr>
                   <tr className="border-b border-amber-200 text-center text-xs font-bold text-slate-600">
-                    <th className="bg-white px-3 py-2 text-left">Buyer Type</th>
-                    {salesPackageColumns.map((column) => (
-                      <th key={column.id} className="px-3 py-2">{column.buyer}</th>
+                    <th className="w-64 bg-white px-3 py-2 text-left">Buyer Type</th>
+                    {buyerTypes.map((buyerType) => (
+                      <th key={buyerType.id} className="bg-emerald-100 px-2 py-2">
+                        <div className="flex min-w-40 items-center gap-2">
+                          <input
+                            disabled={!isAdmin}
+                            value={buyerType.label}
+                            onChange={(event) => updateBuyerType(calculatorIndex, buyerType.id, event.target.value)}
+                            className="h-9 w-full rounded-md border border-emerald-200 bg-white px-2 text-center text-xs font-bold text-emerald-950 outline-none disabled:cursor-not-allowed disabled:text-slate-400 focus:border-emerald-500"
+                            placeholder="Buyer type"
+                            aria-label="Buyer type name"
+                          />
+                          <button
+                            disabled={!isAdmin || buyerTypes.length === 1}
+                            type="button"
+                            onClick={() => removeBuyerType(calculatorIndex, buyerType.id)}
+                            className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-emerald-200 bg-white text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                            aria-label={`Remove ${buyerType.label || 'buyer type'}`}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   <tr className="border-b border-slate-200">
                     <td className="px-3 py-2 font-bold text-slate-700">SPA Price</td>
-                    {salesPackageColumns.map((column) => (
-                      <td key={column.id} className="px-2 py-2">
+                    {buyerTypes.map((buyerType) => (
+                      <td key={buyerType.id} className="px-2 py-2">
                         <input
                           disabled={!isAdmin}
                           type="number"
-                          value={salesCalculator.spaPrices[column.id]}
-                          onChange={(event) => updateSalesCalculatorColumn('spaPrices', column.id, event.target.value)}
+                          value={salesCalculator.spaPrices[buyerType.id] || ''}
+                          onChange={(event) => updateSalesCalculatorColumn(calculatorIndex, 'spaPrices', buyerType.id, event.target.value)}
                           className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 px-2 text-right text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:text-slate-400 focus:border-emerald-400 focus:bg-white"
                         />
                       </td>
@@ -309,14 +397,14 @@ export default function AddPropertyPage({ isAdmin, onSave, propertyRecords = [] 
                           <input
                             disabled={!isAdmin}
                             value={row.label}
-                            onChange={(event) => updateRebateRowMeta(row.id, 'label', event.target.value)}
+                            onChange={(event) => updateRebateRowMeta(calculatorIndex, row.id, 'label', event.target.value)}
                             className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 px-2 text-xs font-bold text-slate-700 outline-none disabled:cursor-not-allowed disabled:text-slate-400 focus:border-emerald-400 focus:bg-white"
                             placeholder="Selection name"
                           />
                           <select
                             disabled={!isAdmin}
                             value={row.type}
-                            onChange={(event) => updateRebateRowMeta(row.id, 'type', event.target.value)}
+                            onChange={(event) => updateRebateRowMeta(calculatorIndex, row.id, 'type', event.target.value)}
                             className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 px-2 text-xs font-bold text-slate-700 outline-none disabled:cursor-not-allowed disabled:text-slate-400 focus:border-emerald-400 focus:bg-white"
                             aria-label={`${row.label || 'Selection'} type`}
                           >
@@ -326,7 +414,7 @@ export default function AddPropertyPage({ isAdmin, onSave, propertyRecords = [] 
                           <button
                             disabled={!isAdmin || salesCalculator.rebateRows.length === 1}
                             type="button"
-                            onClick={() => removeRebateRow(row.id)}
+                            onClick={() => removeRebateRow(calculatorIndex, row.id)}
                             className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
                             aria-label={`Remove ${row.label || 'selection'}`}
                           >
@@ -334,18 +422,18 @@ export default function AddPropertyPage({ isAdmin, onSave, propertyRecords = [] 
                           </button>
                         </div>
                       </td>
-                      {salesPackageColumns.map((column) => {
-                        const rowValue = toAmount(row.values[column.id]);
-                        const rowAmount = salesCalculatorResults[column.id].rebates[row.id];
+                      {buyerTypes.map((buyerType) => {
+                        const rowValue = toAmount(row.values?.[buyerType.id]);
+                        const rowAmount = salesCalculatorResults[buyerType.id].rebates[row.id];
                         return (
-                          <td key={column.id} className="px-2 py-2">
+                          <td key={buyerType.id} className="px-2 py-2">
                             <div className="grid grid-cols-[4.5rem_1fr] items-center gap-2">
                               <input
                                 disabled={!isAdmin}
                                 type="number"
                                 step="0.01"
-                                value={row.values[column.id]}
-                                onChange={(event) => updateRebateRow(row.id, column.id, event.target.value)}
+                                value={row.values?.[buyerType.id] || ''}
+                                onChange={(event) => updateRebateRow(calculatorIndex, row.id, buyerType.id, event.target.value)}
                                 className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 px-2 text-right text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:text-slate-400 focus:border-emerald-400 focus:bg-white"
                               />
                               <span className="text-right text-xs font-semibold text-slate-700">
@@ -359,28 +447,37 @@ export default function AddPropertyPage({ isAdmin, onSave, propertyRecords = [] 
                   ))}
                   <tr className="border-b border-slate-200 bg-slate-50">
                     <td className="px-3 py-2 font-bold text-slate-950">Total Rebates</td>
-                    {salesPackageColumns.map((column) => (
-                      <td key={column.id} className="px-3 py-2 text-right font-bold text-slate-950">
-                        {formatMoney(salesCalculatorResults[column.id].totalRebates)}
+                    {buyerTypes.map((buyerType) => (
+                      <td key={buyerType.id} className="px-3 py-2 text-right font-bold text-slate-950">
+                        {formatMoney(salesCalculatorResults[buyerType.id].totalRebates)}
                       </td>
                     ))}
                   </tr>
                   <tr className="bg-emerald-50">
                     <td className="px-3 py-3 font-bold text-emerald-950">Net to Buyer Price</td>
-                    {salesPackageColumns.map((column) => (
-                      <td key={column.id} className="px-3 py-3 text-right font-bold text-emerald-950">
-                        {formatMoney(salesCalculatorResults[column.id].netBuyerPrice)}
+                    {buyerTypes.map((buyerType) => (
+                      <td key={buyerType.id} className="px-3 py-3 text-right font-bold text-emerald-950">
+                        {formatMoney(salesCalculatorResults[buyerType.id].netBuyerPrice)}
                       </td>
                     ))}
                   </tr>
                 </tbody>
               </table>
             </div>
-            <div className="mt-3 flex justify-start">
+            <div className="mt-3 flex flex-wrap justify-start gap-2">
               <button
                 disabled={!isAdmin}
                 type="button"
-                onClick={addRebateRow}
+                onClick={() => addBuyerType(calculatorIndex)}
+                className="inline-flex h-10 items-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 text-sm font-bold text-slate-700 transition hover:border-emerald-400 hover:text-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+              >
+                <PlusCircle size={16} />
+                Add Buyer Type
+              </button>
+              <button
+                disabled={!isAdmin}
+                type="button"
+                onClick={() => addRebateRow(calculatorIndex)}
                 className="inline-flex h-10 items-center gap-2 rounded-lg border border-amber-300 bg-white px-3 text-sm font-bold text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
               >
                 <PlusCircle size={16} />
@@ -388,6 +485,19 @@ export default function AddPropertyPage({ isAdmin, onSave, propertyRecords = [] 
               </button>
             </div>
           </section>
+            );
+          })}
+          <div className="md:col-span-2 flex justify-center">
+            <button
+              disabled={!isAdmin}
+              type="button"
+              onClick={addSalesCalculator}
+              className="inline-flex h-11 items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-5 text-sm font-bold text-amber-900 transition hover:border-amber-400 hover:bg-amber-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+            >
+              <PlusCircle size={17} />
+              Add Another Sales Package Calculator
+            </button>
+          </div>
         </div>
         <div className="mt-5 flex items-center justify-between gap-4">
           <p className={`text-sm font-semibold ${message.includes('successfully') ? 'text-emerald-700' : 'text-red-700'}`}>{message}</p>

@@ -25,6 +25,7 @@ export async function ensurePropertyStorage() {
     const existingColumns = new Set(columns.map((column) => column.COLUMN_NAME));
     const statusColumn = columns.find((column) => column.COLUMN_NAME === 'status');
     const requiredColumns = [
+      ['remarks', 'LONGTEXT NULL AFTER notes'],
       ['sales_package_name', 'VARCHAR(255) NULL AFTER notes'],
       ['sales_package_type', 'VARCHAR(150) NULL AFTER sales_package_name'],
       ['sales_package_data', 'LONGBLOB NULL AFTER sales_package_type'],
@@ -38,10 +39,25 @@ export async function ensurePropertyStorage() {
       }
     }
 
-    if (!statusColumn?.COLUMN_TYPE.includes("'D'") || statusColumn?.COLUMN_TYPE.includes("'KIV'")) {
+    if (
+      !statusColumn?.COLUMN_TYPE.includes("'D'")
+      || !statusColumn?.COLUMN_TYPE.includes("'Not Available'")
+      || statusColumn?.COLUMN_TYPE.includes("'Booked'")
+      || statusColumn?.COLUMN_TYPE.includes("'Sold'")
+      || statusColumn?.COLUMN_TYPE.includes("'KIV'")
+    ) {
       await connection.query(`
         ALTER TABLE properties
-        MODIFY COLUMN status ENUM('Available', 'Booked', 'Sold', 'D') NOT NULL DEFAULT 'Available'
+        MODIFY COLUMN status ENUM('Available', 'Not Available', 'Booked', 'Sold', 'KIV', 'D') NOT NULL DEFAULT 'Available'
+      `);
+      await connection.query(`
+        UPDATE properties
+        SET status = 'Not Available'
+        WHERE status IN ('Booked', 'Sold', 'KIV')
+      `);
+      await connection.query(`
+        ALTER TABLE properties
+        MODIFY COLUMN status ENUM('Available', 'Not Available', 'D') NOT NULL DEFAULT 'Available'
       `);
     }
 

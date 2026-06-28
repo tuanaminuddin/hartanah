@@ -2,16 +2,14 @@ import { useState } from 'react';
 import {
   EditPropertyDialog,
   Filters,
-  KivPropertyDialog,
   PageHeader,
   PropertyCardGrid,
   PropertyDetailsDialog,
   RecentPropertiesTable,
 } from '../components/shared.jsx';
-export default function PropertyListingPage({ isAdmin, filters, filteredProperties, propertyRecords, onDelete, onEdit, onKiv, onFilterChange, onClearFilters }) {
+export default function PropertyListingPage({ isAdmin, filters, filteredProperties, propertyRecords, onDelete, onEdit, onFilterChange, onClearFilters }) {
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [editingProperty, setEditingProperty] = useState(null);
-  const [kivProperty, setKivProperty] = useState(null);
   const locations = [...new Set(propertyRecords.map((property) => property.location))];
   return (
     <>
@@ -33,7 +31,6 @@ export default function PropertyListingPage({ isAdmin, filters, filteredProperti
           limit={0}
           onDelete={onDelete}
           onEdit={setEditingProperty}
-          onKiv={setKivProperty}
           onViewDetails={setSelectedProperty}
         />
       </div>
@@ -54,13 +51,6 @@ export default function PropertyListingPage({ isAdmin, filters, filteredProperti
           locations={locations}
           onClose={() => setEditingProperty(null)}
           onSave={onEdit}
-        />
-      )}
-      {kivProperty && (
-        <KivPropertyDialog
-          property={kivProperty}
-          onClose={() => setKivProperty(null)}
-          onSave={onKiv}
         />
       )}
     </>

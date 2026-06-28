@@ -8,7 +8,7 @@ import pool, { ensurePropertyStorage } from './db.js';
 const app = express();
 const port = Number(process.env.API_PORT || 3001);
 const jwtSecret = process.env.JWT_SECRET || 'change-this-secret';
-const propertyStatuses = ['Available', 'Booked', 'Sold'];
+const propertyStatuses = ['Available', 'Not Available'];
 
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173' }));
 app.use(express.json({ limit: '110mb' }));
@@ -69,13 +69,25 @@ function renderSalesPackageViewer({ id, name, type }) {
 
 function authenticate(req, res, next) {
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
+  let tokenUser;
 
   try {
-    req.user = jwt.verify(token, jwtSecret);
-    next();
+    tokenUser = jwt.verify(token, jwtSecret);
   } catch {
-    res.status(401).json({ message: 'Please sign in again.' });
+    return res.status(401).json({ message: 'Please sign in again.' });
   }
+
+  pool.execute('SELECT id, role FROM users WHERE id = ? LIMIT 1', [tokenUser.id])
+    .then(([users]) => {
+      const user = users[0];
+      if (!user) {
+        return res.status(401).json({ message: 'This account no longer has portal access.' });
+      }
+
+      req.user = { ...tokenUser, id: user.id, role: user.role };
+      next();
+    })
+    .catch(next);
 }
 
 function adminOnly(req, res, next) {
@@ -104,13 +116,86 @@ app.post('/api/login', async (req, res, next) => {
     );
     const user = users[0];
 
-    if (!user || user.role !== 'admin' || !(await bcrypt.compare(password, user.password_hash))) {
-      return res.status(401).json({ message: 'Invalid admin username or password.' });
+    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+      return res.status(401).json({ message: 'Invalid username or password.' });
     }
 
     const token = jwt.sign({ id: user.id, role: user.role }, jwtSecret, { expiresIn: '8h' });
     delete user.password_hash;
     res.json({ token, user });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/users', authenticate, adminOnly, async (_req, res, next) => {
+  try {
+    const [users] = await pool.query(`
+      SELECT id, username, role, created_at AS createdAt
+      FROM users
+      ORDER BY role, username
+    `);
+    res.json(users);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/users', authenticate, adminOnly, async (req, res, next) => {
+  try {
+    const username = String(req.body.username || '').trim().toLowerCase();
+    const password = String(req.body.password || '');
+    const role = String(req.body.role || 'agent').trim().toLowerCase();
+
+    if (!/^[a-z0-9._-]{3,50}$/.test(username)) {
+      return res.status(400).json({
+        message: 'Username must be 3-50 characters using letters, numbers, dots, dashes, or underscores.',
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters.' });
+    }
+
+    if (!['admin', 'agent'].includes(role)) {
+      return res.status(400).json({ message: 'Select a valid user role.' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const title = role === 'admin' ? 'System Administrator' : 'Sales Agent';
+    const [result] = await pool.execute(
+      `INSERT INTO users (username, password_hash, name, role, title)
+       VALUES (?, ?, ?, ?, ?)`,
+      [username, passwordHash, username, role, title]
+    );
+
+    res.status(201).json({ id: result.insertId, message: 'User account created.' });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ message: 'That username is already in use.' });
+    }
+    next(error);
+  }
+});
+
+app.delete('/api/users/:id', authenticate, adminOnly, async (req, res, next) => {
+  try {
+    const userId = Number(req.params.id);
+
+    if (!Number.isInteger(userId) || userId < 1) {
+      return res.status(400).json({ message: 'Invalid user account.' });
+    }
+
+    if (userId === Number(req.user.id)) {
+      return res.status(400).json({ message: 'You cannot delete your own active account.' });
+    }
+
+    const [result] = await pool.execute('DELETE FROM users WHERE id = ?', [userId]);
+    if (!result.affectedRows) {
+      return res.status(404).json({ message: 'User account not found.' });
+    }
+
+    res.json({ message: 'User account deleted.' });
   } catch (error) {
     next(error);
   }
@@ -141,6 +226,7 @@ app.get('/api/properties', async (_req, res, next) => {
         COALESCE(a.name, p.agent_name) AS agent,
         p.image,
         p.notes,
+        p.remarks,
         p.sales_package_calculator AS salesPackageCalculator,
         DATE_FORMAT(COALESCE(p.updated_at, p.created_at), '%d %b %Y') AS updated
       FROM properties p
@@ -200,6 +286,7 @@ app.post('/api/properties', authenticate, adminOnly, async (req, res, next) => {
       agent,
       image,
       notes,
+      remarks,
       salesPackage,
       salesPackages = [],
       projectImages = [],
@@ -251,10 +338,10 @@ app.post('/api/properties', authenticate, adminOnly, async (req, res, next) => {
       await connection.beginTransaction();
       const [result] = await connection.execute(
         `INSERT INTO properties (
-          name, location, price, status, agent_name, image, notes,
+          name, location, price, status, agent_name, image, notes, remarks,
           sales_package_name, sales_package_type, sales_package_data, sales_package_calculator
         )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           name,
           location,
@@ -263,6 +350,7 @@ app.post('/api/properties', authenticate, adminOnly, async (req, res, next) => {
           agent,
           image || null,
           notes || null,
+          remarks || null,
           null,
           null,
           null,
@@ -309,6 +397,7 @@ app.patch('/api/properties/:id', authenticate, adminOnly, async (req, res, next)
       agent,
       image,
       notes,
+      remarks,
       salesPackages = [],
       projectImages = [],
       salesPackageCalculator = null,
@@ -369,6 +458,7 @@ app.patch('/api/properties/:id', authenticate, adminOnly, async (req, res, next)
           agent_id = NULL,
           image = ?,
           notes = ?,
+          remarks = ?,
           sales_package_calculator = ?,
           updated_at = CURRENT_TIMESTAMP
          WHERE id = ? AND status <> 'D'`,
@@ -380,6 +470,7 @@ app.patch('/api/properties/:id', authenticate, adminOnly, async (req, res, next)
           agent,
           image || null,
           notes || null,
+          remarks || null,
           salesPackageCalculator ? JSON.stringify(salesPackageCalculator) : null,
           req.params.id,
         ]

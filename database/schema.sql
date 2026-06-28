@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS properties (
   agent_name VARCHAR(100) NULL,
   image VARCHAR(500) NULL,
   notes TEXT NULL,
+  remarks LONGTEXT NULL,
   sales_package_name VARCHAR(255) NULL,
   sales_package_type VARCHAR(150) NULL,
   sales_package_data LONGBLOB NULL,
