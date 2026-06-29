@@ -28,15 +28,6 @@ html {
   animation: landing-reveal 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
-.hero-image-frame {
-  transform: rotate(1.5deg);
-  transition: transform 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.hero-image-frame:hover {
-  transform: rotate(0deg) scale(1.008);
-}
-
 @keyframes landing-reveal {
   from {
     opacity: 0;
@@ -57,10 +48,6 @@ html {
     animation: none;
   }
 
-  .hero-image-frame,
-  .hero-image-frame:hover {
-    transform: none;
-  }
 }
 
 .brand-shell {
@@ -81,6 +68,10 @@ html {
     linear-gradient(112deg, transparent 0 12%, rgba(255, 118, 52, 0.12) 12% 14%, transparent 14% 100%),
     linear-gradient(135deg, transparent 0 72%, rgba(255, 128, 64, 0.14) 72% 74%, transparent 74% 100%),
     radial-gradient(circle at 28% 6%, rgba(7, 176, 206, 0.16), transparent 16rem);
+}
+
+.dashboard-shell::before {
+  display: none;
 }
 
 .glass-nav {

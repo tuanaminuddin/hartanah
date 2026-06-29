@@ -237,7 +237,7 @@ export default function App() {
   };
 
   return (
-    <div className="brand-shell flex min-h-screen flex-col bg-slate-50">
+    <div className={`brand-shell flex min-h-screen flex-col bg-slate-50 ${activePage === 'dashboard' ? 'dashboard-shell' : ''}`}>
       <TopNav
         activePage={activePage}
         currentUser={currentUser}
@@ -248,7 +248,7 @@ export default function App() {
         onLogout={handleLogout}
         onMenuClick={() => setIsSidebarOpen((isOpen) => !isOpen)}
       />
-      <main className="mx-auto max-w-7xl px-4 py-8 md:px-6 lg:px-8">
+      <main className={activePage === 'dashboard' ? 'w-full' : 'mx-auto w-full max-w-7xl px-4 py-8 md:px-6 lg:px-8'}>
         {dataError && currentUser.role !== 'public' && (
           <p className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
             Database connection error: {dataError}

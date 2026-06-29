@@ -11,11 +11,12 @@ import {
   Eye,
   FileText,
   LayoutDashboard,
-  LockKeyhole,
+  LogIn,
   LogOut,
   MapPinned,
   MapPin,
   Menu,
+  MessageCircle,
   Pencil,
   Play,
   PlusCircle,
@@ -34,6 +35,14 @@ export const menuItems = [
   { id: 'agents', label: 'Add Agent', icon: Users, adminOnly: true },
   { id: 'monthly-installment', label: 'Monthly Installment', icon: Calculator },
   { id: 'settings', label: 'Settings', icon: Settings, adminOnly: true },
+];
+
+const publicMenuItems = [
+  { id: 'home', label: 'Home', icon: LayoutDashboard },
+  { id: 'about', label: 'About', icon: BriefcaseBusiness },
+  { id: 'services', label: 'How We Help', icon: Building2 },
+  { id: 'team', label: 'Team', icon: Users },
+  { id: 'contact', label: 'Contact', icon: MessageCircle },
 ];
 
 export const statusStyles = {
@@ -266,6 +275,11 @@ export function TopNav({
   const visibleMenuItems = menuItems.filter((item) => (
     item.id === 'dashboard' || (isSignedIn && (isAdmin || !item.adminOnly))
   ));
+  const handlePublicSectionClick = (event, sectionId) => {
+    event.preventDefault();
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (isMenuOpen) onMenuClick();
+  };
 
   return (
     <header className="glass-nav sticky top-0 z-30">
@@ -290,21 +304,25 @@ export function TopNav({
             <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-white/70 bg-white/60">
               <img className="h-full w-full object-cover" src="/images/logo_infinite.jpeg" alt="Infinite team" />
             </div>
-            <span className="truncate text-sm font-semibold text-slate-950">Infinite</span>
+            <span className="truncate text-sm font-bold text-slate-950">Infinite Property</span>
           </a>
         </div>
 
         <nav className="simple-tab-bar hidden items-center justify-center gap-1 lg:flex">
-          {visibleMenuItems.map((item) => (
+          {(isSignedIn ? visibleMenuItems : publicMenuItems).map((item) => (
             <a
               key={item.id}
-              href={getPagePath(item.id)}
+              href={isSignedIn ? getPagePath(item.id) : `#${item.id}`}
               onClick={(event) => {
+                if (!isSignedIn) {
+                  handlePublicSectionClick(event, item.id);
+                  return;
+                }
                 event.preventDefault();
                 onNavigate(item.id);
               }}
               className={`simple-tab inline-flex h-10 items-center rounded-full px-5 text-sm font-semibold ${
-                activePage === item.id
+                isSignedIn && activePage === item.id
                   ? 'simple-tab-active'
                   : ''
               }`}
@@ -317,29 +335,34 @@ export function TopNav({
         <div className="flex items-center justify-end gap-1">
           <button
             onClick={isSignedIn ? onLogout : onAdminAccess}
-            className="glass-icon-button grid h-9 w-9 place-items-center rounded-full text-slate-900 transition"
+            className="glass-icon-button inline-flex h-9 items-center justify-center gap-2 rounded-full px-3 text-slate-900 transition"
             aria-label={isSignedIn ? 'Sign out' : 'Sign in'}
             title={isSignedIn ? `Sign out ${currentUser.username || currentUser.name}` : 'Portal sign in'}
           >
-            {isSignedIn ? <LogOut size={18} /> : <LockKeyhole size={18} />}
+            {isSignedIn ? <LogOut size={18} /> : <LogIn size={17} />}
+            <span className="hidden text-xs font-bold sm:inline">{isSignedIn ? 'Sign out' : 'Team login'}</span>
           </button>
         </div>
       </div>
       {isMenuOpen && (
         <div className="glass-menu absolute left-0 right-0 top-full px-4 py-3 lg:hidden">
           <nav className="mx-auto grid max-w-7xl gap-1">
-            {visibleMenuItems.map((item) => {
+            {(isSignedIn ? visibleMenuItems : publicMenuItems).map((item) => {
               const Icon = item.icon;
               return (
                 <a
                   key={item.id}
-                  href={getPagePath(item.id)}
+                  href={isSignedIn ? getPagePath(item.id) : `#${item.id}`}
                   onClick={(event) => {
+                    if (!isSignedIn) {
+                      handlePublicSectionClick(event, item.id);
+                      return;
+                    }
                     event.preventDefault();
                     onNavigate(item.id);
                   }}
                   className={`simple-tab flex h-11 items-center gap-3 rounded-full px-4 text-left text-sm font-semibold ${
-                    activePage === item.id
+                    isSignedIn && activePage === item.id
                       ? 'simple-tab-active'
                       : ''
                   }`}

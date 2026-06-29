@@ -1,7 +1,25 @@
 1. Berape gambar yang akan dimasukkan ke dalam setiap projek 
    -since nak pilih the best server for the future
 2. Berape ramai user dalam satu2 masa?
+250
 3. Tema warna for website?
+white and gold - confortable and senang tengok
 4. Gambar
 5. Saya tak suggest ada information agent since that one akan 
    related to pdpa. (Malaysia Personal Data Protection Principles)
+
+problem statement
+1. Kena pergi somewhere else to find the information 
+2. Standardize the information, better 
+
+infiniteproperty.com.my
+
+dashboard - any user
+admin
+agent - ada calculator
+
+Status
+available
+not available
+
+user login
