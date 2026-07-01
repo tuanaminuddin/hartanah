@@ -2,28 +2,40 @@ import { useEffect, useRef, useState } from 'react';
 import { login } from '../api.js';
 import { getPagePath } from '../routes.js';
 import {
+  Bold,
   Building2,
   BriefcaseBusiness,
   Calculator,
   Camera,
+  CheckSquare,
   CircleDollarSign,
   Clock,
+  Code2,
   Eye,
   FileText,
+  Image as ImageIcon,
+  Italic,
   LayoutDashboard,
+  Link2,
+  List,
+  ListOrdered,
   LogIn,
   LogOut,
   MapPinned,
   MapPin,
   Menu,
   MessageCircle,
+  MoreVertical,
   Pencil,
   Play,
   PlusCircle,
+  Quote,
+  RemoveFormatting,
   Search,
   Settings,
   ShieldCheck,
   SlidersHorizontal,
+  Strikethrough,
   Trash2,
   Users,
   X,
@@ -53,6 +65,166 @@ export const statusStyles = {
 };
 
 export const statuses = ['Available', 'Not Available'];
+
+const richTextTags = new Set([
+  'A', 'B', 'BLOCKQUOTE', 'BR', 'CODE', 'DIV', 'EM', 'H2', 'H3', 'IMG', 'LI',
+  'OL', 'P', 'PRE', 'S', 'STRONG', 'U', 'UL',
+]);
+
+const escapeHtml = (value) => String(value)
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#039;');
+
+const normalizeRichText = (value) => {
+  const text = String(value || '');
+  if (!text) return '';
+  if (/<[a-z][\s\S]*>/i.test(text)) return text;
+  return text.split(/\r?\n/).map((line) => `<div>${escapeHtml(line) || '<br>'}</div>`).join('');
+};
+
+export const sanitizeRichText = (value, normalizePlainText = true) => {
+  if (typeof document === 'undefined') return String(value || '');
+
+  const container = document.createElement('div');
+  container.innerHTML = normalizePlainText ? normalizeRichText(value) : String(value || '');
+
+  const cleanNode = (node) => {
+    Array.from(node.children).forEach((child) => {
+      cleanNode(child);
+
+      if (!richTextTags.has(child.tagName)) {
+        child.replaceWith(...child.childNodes);
+        return;
+      }
+
+      Array.from(child.attributes).forEach((attribute) => {
+        const allowed = (
+          (child.tagName === 'A' && ['href', 'target', 'rel'].includes(attribute.name))
+          || (child.tagName === 'IMG' && ['src', 'alt'].includes(attribute.name))
+          || (child.tagName === 'UL' && attribute.name === 'data-list')
+        );
+        if (!allowed) child.removeAttribute(attribute.name);
+      });
+
+      if (child.tagName === 'A') {
+        const href = child.getAttribute('href') || '';
+        if (!/^(https?:\/\/|mailto:|tel:)/i.test(href)) child.removeAttribute('href');
+        child.setAttribute('target', '_blank');
+        child.setAttribute('rel', 'noopener noreferrer');
+      }
+
+      if (child.tagName === 'IMG') {
+        const src = child.getAttribute('src') || '';
+        if (!/^https?:\/\//i.test(src)) child.remove();
+      }
+    });
+  };
+
+  cleanNode(container);
+  return container.innerHTML;
+};
+
+export function RichTextEditor({ value, onChange, disabled = false, placeholder = '' }) {
+  const editorRef = useRef(null);
+  const [showMore, setShowMore] = useState(false);
+
+  useEffect(() => {
+    if (!editorRef.current || editorRef.current === document.activeElement) return;
+    const nextHtml = sanitizeRichText(value);
+    if (editorRef.current.innerHTML !== nextHtml) editorRef.current.innerHTML = nextHtml;
+  }, [value]);
+
+  const syncValue = () => {
+    if (!editorRef.current) return;
+    const html = sanitizeRichText(editorRef.current.innerHTML, false);
+    onChange(html === '<br>' ? '' : html);
+  };
+
+  const runCommand = (command, commandValue = null) => {
+    if (disabled) return;
+    editorRef.current?.focus();
+    document.execCommand(command, false, commandValue);
+    syncValue();
+  };
+
+  const insertLink = () => {
+    const url = window.prompt('Enter a web address (https://...)');
+    if (!url) return;
+    const safeUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    runCommand('createLink', safeUrl);
+  };
+
+  const insertImage = () => {
+    const url = window.prompt('Enter an image web address (https://...)');
+    if (!url) return;
+    const safeUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    runCommand('insertImage', safeUrl);
+  };
+
+  const insertChecklist = () => {
+    runCommand('insertHTML', '<ul data-list="check"><li>Checklist item</li></ul>');
+  };
+
+  const toolbarButton = (label, Icon, onClick) => (
+    <button
+      key={label}
+      type="button"
+      disabled={disabled}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onClick}
+      className="grid h-9 w-9 shrink-0 place-items-center border-l border-slate-200 text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 disabled:cursor-not-allowed disabled:text-slate-300"
+      aria-label={label}
+      title={label}
+    >
+      <Icon size={17} />
+    </button>
+  );
+
+  return (
+    <div className={`mt-2 overflow-hidden rounded-lg border bg-slate-50 transition focus-within:border-emerald-400 focus-within:bg-white focus-within:ring-4 focus-within:ring-emerald-100 ${disabled ? 'border-slate-200 opacity-70' : 'border-slate-200'}`}>
+      <div className="flex min-h-10 items-center overflow-x-auto border-b border-slate-200 bg-white">
+        <select
+          disabled={disabled}
+          defaultValue="div"
+          onChange={(event) => runCommand('formatBlock', event.target.value)}
+          className="h-9 min-w-36 border-0 bg-transparent px-3 text-sm text-slate-700 outline-none disabled:cursor-not-allowed"
+          aria-label="Text style"
+        >
+          <option value="div">Paragraph</option>
+          <option value="h2">Heading 2</option>
+          <option value="h3">Heading 3</option>
+          <option value="blockquote">Quote</option>
+          <option value="pre">Code block</option>
+        </select>
+        {toolbarButton('Bold', Bold, () => runCommand('bold'))}
+        {toolbarButton('Italic', Italic, () => runCommand('italic'))}
+        {toolbarButton('Strikethrough', Strikethrough, () => runCommand('strikeThrough'))}
+        {toolbarButton('Inline code', Code2, () => runCommand('insertHTML', `<code>${escapeHtml(window.getSelection()?.toString() || 'code')}</code>`))}
+        {toolbarButton('Link', Link2, insertLink)}
+        {toolbarButton('Bulleted list', List, () => runCommand('insertUnorderedList'))}
+        {toolbarButton('Numbered list', ListOrdered, () => runCommand('insertOrderedList'))}
+        {toolbarButton('Checklist', CheckSquare, insertChecklist)}
+        {toolbarButton('Image', ImageIcon, insertImage)}
+        {toolbarButton('Quote', Quote, () => runCommand('formatBlock', 'blockquote'))}
+        {toolbarButton('More formatting', MoreVertical, () => setShowMore((current) => !current))}
+        {showMore && toolbarButton('Clear formatting', RemoveFormatting, () => runCommand('removeFormat'))}
+      </div>
+      <div
+        ref={editorRef}
+        contentEditable={!disabled}
+        suppressContentEditableWarning
+        onInput={syncValue}
+        onBlur={syncValue}
+        data-placeholder={placeholder}
+        className="rich-text-editor min-h-48 w-full px-3 py-3 text-sm leading-6 text-slate-700 outline-none"
+        aria-label="Notes"
+      />
+    </div>
+  );
+}
 
 export const getFileType = (file, fallbackType = 'application/octet-stream') => {
   if (file.type) return file.type;
@@ -1235,15 +1407,14 @@ export function EditPropertyDialog({ property, locations = [], onClose, onSave }
               </ul>
             )}
           </label>
-          <label className="block md:col-span-2">
+          <div className="block md:col-span-2">
             <span className="text-sm font-bold text-slate-700">Notes</span>
-            <textarea
+            <RichTextEditor
               value={form.remarks}
-              onChange={(event) => updateField('remarks', event.target.value)}
-              className="mt-2 min-h-48 w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+              onChange={(value) => updateField('remarks', value)}
               placeholder="Add any project notes. Full web links become clickable in Property Details."
             />
-          </label>
+          </div>
           <section className="md:col-span-2 rounded-lg border border-amber-200 bg-amber-50/50 p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="flex items-start gap-3">
@@ -1658,6 +1829,10 @@ export function SalesPackageCalculatorSummary({ calculator }) {
 }
 
 function RemarksWithLinks({ text }) {
+  if (/<[a-z][\s\S]*>/i.test(String(text))) {
+    return <div className="rich-text-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(text) }} />;
+  }
+
   const parts = String(text).split(/(https?:\/\/[^\s]+|www\.[^\s]+)/gi);
 
   return parts.map((part, index) => {

@@ -12,6 +12,7 @@ import {
   PageHeader,
   PermissionNotice,
   ProjectImagePreviews,
+  RichTextEditor,
   statuses,
   toAmount,
 } from '../components/shared.jsx';
@@ -258,17 +259,16 @@ export default function AddPropertyPage({ isAdmin, onSave, propertyRecords = [] 
               required
             />
           </label>
-          <label className="block md:col-span-2">
+          <div className="block md:col-span-2">
             <span className="text-sm font-bold text-slate-700">Notes</span>
-            <textarea
+            <RichTextEditor
               disabled={!isAdmin}
               value={form.remarks}
-              onChange={(event) => updateField('remarks', event.target.value)}
-              className="mt-2 min-h-48 w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 outline-none disabled:cursor-not-allowed disabled:text-slate-400 focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+              onChange={(value) => updateField('remarks', value)}
               placeholder="Add any project notes here. Paste a full web link (https://...) to make it clickable in Property Details."
             />
             <span className="mt-1 block text-xs text-slate-500">Notes are only shown after an agent opens Property Details.</span>
-          </label>
+          </div>
           <label className="block md:col-span-2">
             <span className="text-sm font-bold text-slate-700">Project Images</span>
             <input
