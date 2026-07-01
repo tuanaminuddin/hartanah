@@ -3,11 +3,12 @@ import {
   createProperty,
   createUser,
   deleteUser,
+  getProperty,
   getProperties,
   getUsers,
-  softDeleteProperty,
+  permanentlyDeleteProperty,
   updateProperty,
-  updatePropertyKiv,
+  updatePropertyArchive,
 } from './api.js';
 import {
   AdminLoginDialog,
@@ -29,6 +30,10 @@ export default function App() {
   const [token, setToken] = useState('');
   const [isAdminDialogOpen, setIsAdminDialogOpen] = useState(false);
   const [propertyRecords, setPropertyRecords] = useState([]);
+  const [listingMeta, setListingMeta] = useState({ total: 0, page: 1, pageSize: 20, totalPages: 1, counts: { active: 0, archived: 0 } });
+  const [listingPage, setListingPage] = useState(1);
+  const [showArchived, setShowArchived] = useState(false);
+  const [isLoadingProperties, setIsLoadingProperties] = useState(false);
   const [userRecords, setUserRecords] = useState([]);
   const [dataError, setDataError] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -38,27 +43,42 @@ export default function App() {
     location: '',
     status: '',
   });
+  const [appliedFilters, setAppliedFilters] = useState({ search: '', location: '', status: '' });
 
-  const loadData = async (authToken = token, userRole = currentUser.role) => {
+  const formatProperty = (property) => ({
+    ...property,
+    isArchived: Boolean(property.isArchived),
+    price: `RM ${Number(property.price).toLocaleString('en-MY')}`,
+  });
+
+  const loadProperties = async (
+    authToken = token,
+    query = { ...appliedFilters, page: listingPage, archived: showArchived },
+  ) => {
     try {
       setDataError('');
-      const [propertyData, userData] = await Promise.all([
-        getProperties(authToken),
-        userRole === 'admin' ? getUsers(authToken) : Promise.resolve([]),
-      ]);
-      setPropertyRecords(propertyData.map((property) => ({
-        ...property,
-        isKiv: Boolean(property.isKiv),
-        price: `RM ${Number(property.price).toLocaleString('en-MY')}`,
-      })));
-      setUserRecords(userData);
+      setIsLoadingProperties(true);
+      const propertyData = await getProperties(authToken, query);
+      setPropertyRecords(propertyData.items.map(formatProperty));
+      setListingMeta(propertyData);
+      if (propertyData.page !== listingPage) setListingPage(propertyData.page);
     } catch (requestError) {
       setDataError(requestError.message);
+    } finally {
+      setIsLoadingProperties(false);
     }
   };
 
   useEffect(() => {
-    loadData(token, currentUser.role);
+    loadProperties(token, { ...appliedFilters, page: listingPage, archived: showArchived });
+  }, [token, currentUser.role, appliedFilters, listingPage, showArchived]);
+
+  useEffect(() => {
+    if (currentUser.role !== 'admin') {
+      setUserRecords([]);
+      return;
+    }
+    getUsers(token).then(setUserRecords).catch((error) => setDataError(error.message));
   }, [token, currentUser.role]);
 
   useEffect(() => {
@@ -102,24 +122,6 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleAdminShortcut);
   }, [currentUser.role]);
 
-  const filteredProperties = propertyRecords.filter((property) => {
-    const searchText = [
-      property.name,
-      property.location,
-      property.agent,
-      property.price,
-      property.status,
-      property.updated,
-      property.salesPackages?.map((item) => item.name).join(' '),
-    ].filter(Boolean).join(' ').toLowerCase();
-    const matchesSearch = searchText.includes(filters.search.trim().toLowerCase());
-    const locationSearch = filters.location.trim().toLowerCase();
-    const matchesLocation = !locationSearch || property.location?.toLowerCase().includes(locationSearch);
-    const matchesStatus = !filters.status || property.status === filters.status;
-
-    return matchesSearch && matchesLocation && matchesStatus;
-  });
-
   const handleFilterChange = (key, value) => {
     setFilters((currentFilters) => ({
       ...currentFilters,
@@ -128,11 +130,15 @@ export default function App() {
   };
 
   const clearFilters = () => {
-    setFilters({
-      search: '',
-      location: '',
-      status: '',
-    });
+    const emptyFilters = { search: '', location: '', status: '' };
+    setFilters(emptyFilters);
+    setAppliedFilters(emptyFilters);
+    setListingPage(1);
+  };
+
+  const applyFilters = () => {
+    setAppliedFilters({ ...filters });
+    setListingPage(1);
   };
 
   const handleNavigate = (pageId) => {
@@ -175,34 +181,43 @@ export default function App() {
 
   const handleSaveProperty = async (property) => {
     const result = await createProperty(token, property);
-    await loadData();
+    setShowArchived(false);
+    setListingPage(1);
+    await loadProperties(token, { ...appliedFilters, page: 1, archived: false });
     return result;
   };
 
   const handleSaveUser = async (user) => {
     await createUser(token, user);
-    await loadData();
+    setUserRecords(await getUsers(token));
   };
 
   const handleDeleteUser = async (userId) => {
     await deleteUser(token, userId);
-    await loadData();
+    setUserRecords(await getUsers(token));
   };
 
   const handleUpdateProperty = async (propertyId, property) => {
     const result = await updateProperty(token, propertyId, property);
-    await loadData();
+    await loadProperties();
     return result;
   };
 
-  const handleUpdatePropertyKiv = async (propertyId, isKiv) => {
-    await updatePropertyKiv(token, propertyId, isKiv);
-    await loadData();
+  const handleUpdatePropertyArchive = async (propertyId, archived) => {
+    await updatePropertyArchive(token, propertyId, archived);
+    await loadProperties();
   };
 
   const handleDeleteProperty = async (propertyId) => {
-    await softDeleteProperty(token, propertyId);
-    await loadData();
+    await permanentlyDeleteProperty(token, propertyId);
+    await loadProperties();
+  };
+
+  const handleLoadProperty = async (propertyId) => formatProperty(await getProperty(token, propertyId));
+
+  const handleArchiveTabChange = (archived) => {
+    setShowArchived(archived);
+    setListingPage(1);
   };
 
   const isAdmin = currentUser.role === 'admin';
@@ -210,13 +225,21 @@ export default function App() {
   const pageProps = {
     isAdmin,
     filters,
-    filteredProperties,
+    filteredProperties: propertyRecords,
     propertyRecords,
+    listingMeta,
+    listingPage,
+    showArchived,
+    isLoadingProperties,
     onFilterChange: handleFilterChange,
+    onSearch: applyFilters,
     onClearFilters: clearFilters,
     onDelete: handleDeleteProperty,
     onEdit: handleUpdateProperty,
-    onKiv: handleUpdatePropertyKiv,
+    onArchive: handleUpdatePropertyArchive,
+    onArchiveTabChange: handleArchiveTabChange,
+    onPageChange: setListingPage,
+    onLoadProperty: handleLoadProperty,
     onNavigate: handleNavigate,
   };
 

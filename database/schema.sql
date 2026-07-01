@@ -39,10 +39,11 @@ CREATE TABLE IF NOT EXISTS properties (
   sales_package_type VARCHAR(150) NULL,
   sales_package_data LONGBLOB NULL,
   sales_package_calculator LONGTEXT NULL,
-  is_kiv TINYINT(1) NOT NULL DEFAULT 0,
+  is_archived TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NULL,
-  CONSTRAINT fk_properties_agent FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE SET NULL
+  CONSTRAINT fk_properties_agent FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE SET NULL,
+  INDEX idx_properties_archive_updated (is_archived, status, updated_at, created_at)
 );
 
 CREATE TABLE IF NOT EXISTS property_images (

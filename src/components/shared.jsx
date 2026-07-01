@@ -3,19 +3,22 @@ import { login } from '../api.js';
 import { getPagePath } from '../routes.js';
 import {
   Bold,
+  Archive,
   Building2,
   BriefcaseBusiness,
   Calculator,
   Camera,
+  ChevronLeft,
+  ChevronRight,
   CheckSquare,
   CircleDollarSign,
-  Clock,
   Code2,
   Eye,
   FileText,
   Image as ImageIcon,
   Italic,
   LayoutDashboard,
+  LayoutGrid,
   Link2,
   List,
   ListOrdered,
@@ -36,6 +39,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Strikethrough,
+  Table2,
   Trash2,
   Users,
   X,
@@ -712,9 +716,12 @@ export function MalaysiaLocationInput({
   );
 }
 
-export function Filters({ filters, locations, onFilterChange, onClearFilters, resultCount }) {
+export function Filters({ filters, locations, onFilterChange, onSearch, onClearFilters, resultCount }) {
   return (
-    <section className="relative z-20 overflow-visible rounded-lg border border-white/60 bg-white/25 p-3 shadow-[0_24px_70px_rgba(15,23,42,0.18)] ring-1 ring-white/40 backdrop-blur-2xl backdrop-saturate-150 before:absolute before:inset-x-4 before:top-0 before:h-px before:bg-white/80">
+    <form
+      onSubmit={(event) => { event.preventDefault(); onSearch?.(); }}
+      className="relative z-20 overflow-visible rounded-lg border border-white/60 bg-white/25 p-3 shadow-[0_24px_70px_rgba(15,23,42,0.18)] ring-1 ring-white/40 backdrop-blur-2xl backdrop-saturate-150 before:absolute before:inset-x-4 before:top-0 before:h-px before:bg-white/80"
+    >
       <div className="relative z-10 grid gap-3 md:grid-cols-[1.2fr_1fr_1fr_auto_auto]">
         <label className="relative block min-w-0">
           <MapPin className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-stone-500" size={18} />
@@ -752,7 +759,7 @@ export function Filters({ filters, locations, onFilterChange, onClearFilters, re
           />
         </label>
         <button
-          type="button"
+          type="submit"
           className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-amber-500 px-6 text-sm font-bold text-white shadow-[0_14px_30px_rgba(180,115,22,0.32)] transition hover:bg-amber-400"
         >
           <Search size={17} />
@@ -771,16 +778,16 @@ export function Filters({ filters, locations, onFilterChange, onClearFilters, re
       <div className="relative z-10 mt-3 flex justify-end">
         <p className="shrink-0 text-sm font-bold text-stone-600">{resultCount} properties found</p>
       </div>
-    </section>
+    </form>
   );
 }
 
-export function RecentPropertiesTable({ properties, isAdmin = false, limit = 5, onDelete, onEdit, onKiv, onViewDetails }) {
+export function RecentPropertiesTable({ properties, isAdmin = false, limit = 5, onDelete, onEdit, onArchive, onViewDetails }) {
   const [deletingId, setDeletingId] = useState(null);
   const visibleProperties = limit ? properties.slice(0, limit) : properties;
 
   const handleDelete = async (property) => {
-    if (!window.confirm(`Delete "${property.name}" from active listings?`)) {
+    if (!window.confirm(`Permanently delete "${property.name}"? This cannot be undone.`)) {
       return;
     }
 
@@ -798,12 +805,14 @@ export function RecentPropertiesTable({ properties, isAdmin = false, limit = 5, 
     <section className="rounded-lg border border-slate-200 bg-white shadow-soft">
       <div className="flex flex-col gap-2 border-b border-slate-200 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-bold text-slate-950">Recent Properties</h2>
-          <p className="text-sm text-slate-500">Latest portfolio updates from active developers</p>
+          <h2 className="text-lg font-bold text-slate-950">{limit ? 'Recent Properties' : 'Properties'}</h2>
+          <p className="text-sm text-slate-500">{limit ? 'Latest portfolio updates from active developers' : 'Current property records'}</p>
         </div>
-        <button className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 px-4 text-sm font-bold text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700">
-          View All
-        </button>
+        {Boolean(limit) && (
+          <button className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 px-4 text-sm font-bold text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700">
+            View All
+          </button>
+        )}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[980px] text-left text-sm">
@@ -877,19 +886,19 @@ export function RecentPropertiesTable({ properties, isAdmin = false, limit = 5, 
                           <Pencil size={15} />
                         </button>
                       )}
-                      {onKiv && (
+                      {onArchive && (
                         <button
                           type="button"
-                          onClick={() => onKiv(property)}
+                          onClick={() => onArchive(property)}
                           className={`inline-grid h-8 w-8 place-items-center rounded-md transition ${
-                            property.isKiv
+                            property.isArchived
                               ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
                               : 'text-amber-600 hover:bg-amber-50 hover:text-amber-700'
                           }`}
-                          aria-label={`${property.isKiv ? 'UnKIV' : 'KIV'} ${property.name}`}
-                          title={property.isKiv ? 'UnKIV' : 'KIV'}
+                          aria-label={`${property.isArchived ? 'Restore' : 'Archive'} ${property.name}`}
+                          title={property.isArchived ? 'Restore' : 'Archive'}
                         >
-                          <Clock size={15} />
+                          <Archive size={15} />
                         </button>
                       )}
                       {onDelete && (
@@ -922,7 +931,7 @@ export function RecentPropertiesTable({ properties, isAdmin = false, limit = 5, 
   );
 }
 
-export function PropertyCard({ property, isAdmin = false, onEdit, onViewDetails }) {
+export function PropertyCard({ property, isAdmin = false, onEdit, onArchive, onDelete, onViewDetails }) {
   const images = property.projectImages?.length
     ? property.projectImages
     : property.image
@@ -934,7 +943,7 @@ export function PropertyCard({ property, isAdmin = false, onEdit, onViewDetails 
     <article className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-soft">
       <div className="aspect-[16/10] w-full overflow-hidden bg-slate-100">
         {images.length ? (
-          <img className="h-full w-full object-cover" src={images[activeImage]?.url} alt={property.name} />
+          <img loading="lazy" decoding="async" className="h-full w-full object-cover" src={images[activeImage]?.url} alt={property.name} />
         ) : (
           <div className="grid h-full place-items-center text-sm font-semibold text-slate-400">No project image</div>
         )}
@@ -951,7 +960,7 @@ export function PropertyCard({ property, isAdmin = false, onEdit, onViewDetails 
               }`}
               aria-label={`Show project image ${index + 1}`}
             >
-              <img className="h-full w-full object-cover" src={image.url} alt="" />
+              <img loading="lazy" decoding="async" className="h-full w-full object-cover" src={image.url} alt="" />
             </button>
           ))}
         </div>
@@ -984,6 +993,28 @@ export function PropertyCard({ property, isAdmin = false, onEdit, onViewDetails 
               >
                 <Pencil size={15} />
                 Edit
+              </button>
+            )}
+          </div>
+        )}
+        {isAdmin && onArchive && (
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => onArchive(property)}
+              className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg border border-amber-200 text-xs font-bold text-amber-700 transition hover:bg-amber-50"
+            >
+              <Archive size={14} />
+              {property.isArchived ? 'Restore' : 'Archive'}
+            </button>
+            {property.isArchived && onDelete && (
+              <button
+                type="button"
+                onClick={() => onDelete(property)}
+                className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg border border-red-200 text-xs font-bold text-red-600 transition hover:bg-red-50"
+              >
+                <Trash2 size={14} />
+                Delete
               </button>
             )}
           </div>
@@ -1021,7 +1052,7 @@ export function PageHeader({ title, description, action, backgroundImage, childr
 }
 
 
-export function PropertyCardGrid({ properties, isAdmin = false, onEdit, onViewDetails }) {
+export function PropertyCardGrid({ properties, isAdmin = false, onEdit, onArchive, onDelete, onViewDetails }) {
   return (
     <>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -1031,6 +1062,8 @@ export function PropertyCardGrid({ properties, isAdmin = false, onEdit, onViewDe
             property={property}
             isAdmin={isAdmin}
             onEdit={onEdit}
+            onArchive={onArchive}
+            onDelete={onDelete}
             onViewDetails={onViewDetails}
           />
         ))}
@@ -1042,81 +1075,6 @@ export function PropertyCardGrid({ properties, isAdmin = false, onEdit, onViewDe
         </div>
       )}
     </>
-  );
-}
-
-export function KivPropertyDialog({ property, onClose, onSave }) {
-  const [message, setMessage] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-  const nextIsKiv = !property.isKiv;
-  const actionLabel = nextIsKiv ? 'KIV' : 'UnKIV';
-
-  const handleSubmit = async () => {
-    setMessage('');
-    setIsSaving(true);
-    try {
-      await onSave(property.id, nextIsKiv);
-      onClose();
-    } catch (requestError) {
-      setMessage(requestError.message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 px-4">
-      <button className="absolute inset-0 h-full w-full" type="button" onClick={onClose} aria-label="Close KIV property" />
-      <section className="relative w-full max-w-lg rounded-lg border border-slate-200 bg-white p-6 shadow-2xl">
-        <div className="mb-5 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-600">Admin Action</p>
-            <h2 className="mt-1 text-2xl font-bold text-slate-950">{actionLabel} Property</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              {nextIsKiv
-                ? 'This listing will be hidden from users on every page.'
-                : 'This listing will be visible to users again.'}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
-            aria-label="Close"
-          >
-            <X size={19} />
-          </button>
-        </div>
-
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <p className="font-bold text-slate-950">{property.name}</p>
-          <p className="mt-1 text-sm font-medium text-slate-600">{property.location}</p>
-          <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-            <div>
-              <p className="text-xs font-bold uppercase text-slate-500">Price</p>
-              <p className="mt-1 font-bold text-slate-900">{property.price}</p>
-            </div>
-            <div>
-              <p className="text-xs font-bold uppercase text-slate-500">Developer</p>
-              <p className="mt-1 font-bold text-slate-900">{property.agent}</p>
-            </div>
-          </div>
-        </div>
-
-        {message && <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{message}</p>}
-
-        <div className="mt-6 flex justify-end">
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isSaving}
-            className="inline-flex h-10 items-center justify-center rounded-lg bg-amber-500 px-4 text-sm font-bold text-slate-950 transition hover:bg-amber-400"
-          >
-            {isSaving ? 'Saving...' : actionLabel}
-          </button>
-        </div>
-      </section>
-    </div>
   );
 }
 
@@ -1825,6 +1783,81 @@ export function SalesPackageCalculatorSummary({ calculator }) {
         );
       })}
     </div>
+  );
+}
+
+export function PropertyViewControls({ view, onViewChange }) {
+  return (
+    <div className="inline-flex h-10 items-center rounded-lg border border-slate-200 bg-white p-1" aria-label="Property view">
+      <button
+        type="button"
+        onClick={() => onViewChange('table')}
+        className={`grid h-8 w-9 place-items-center rounded-md transition ${view === 'table' ? 'bg-slate-950 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+        aria-label="Table view"
+        title="Table view"
+      >
+        <Table2 size={16} />
+      </button>
+      <button
+        type="button"
+        onClick={() => onViewChange('cards')}
+        className={`grid h-8 w-9 place-items-center rounded-md transition ${view === 'cards' ? 'bg-slate-950 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+        aria-label="Card view"
+        title="Card view"
+      >
+        <LayoutGrid size={16} />
+      </button>
+    </div>
+  );
+}
+
+export function PropertyPagination({ page, totalPages, total, pageSize, onPageChange }) {
+  if (totalPages <= 1) return null;
+  const firstItem = (page - 1) * pageSize + 1;
+  const lastItem = Math.min(page * pageSize, total);
+  const pageNumbers = Array.from({ length: totalPages }, (_, index) => index + 1)
+    .filter((number) => number === 1 || number === totalPages || Math.abs(number - page) <= 1);
+
+  return (
+    <nav className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" aria-label="Property pages">
+      <p className="text-sm font-semibold text-slate-500">Showing {firstItem}-{lastItem} of {total}</p>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+          className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="Previous page"
+        >
+          <ChevronLeft size={17} />
+        </button>
+        {pageNumbers.map((number, index) => {
+          const previous = pageNumbers[index - 1];
+          return (
+            <span key={number} className="contents">
+              {previous && number - previous > 1 && <span className="px-1 text-slate-400">...</span>}
+              <button
+                type="button"
+                onClick={() => onPageChange(number)}
+                aria-current={number === page ? 'page' : undefined}
+                className={`h-9 min-w-9 rounded-md px-2 text-sm font-bold transition ${number === page ? 'bg-emerald-500 text-slate-950' : 'border border-slate-200 bg-white text-slate-600 hover:border-emerald-300'}`}
+              >
+                {number}
+              </button>
+            </span>
+          );
+        })}
+        <button
+          type="button"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(page + 1)}
+          className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="Next page"
+        >
+          <ChevronRight size={17} />
+        </button>
+      </div>
+    </nav>
   );
 }
 

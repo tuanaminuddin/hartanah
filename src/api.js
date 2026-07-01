@@ -34,8 +34,19 @@ export function login(credentials) {
   });
 }
 
-export function getProperties(token = '') {
-  return request('/properties', {
+export function getProperties(token = '', query = {}) {
+  const parameters = new URLSearchParams();
+  Object.entries(query).forEach(([key, value]) => {
+    if (value !== '' && value !== undefined && value !== null) parameters.set(key, String(value));
+  });
+  const queryString = parameters.toString();
+  return request(`/properties${queryString ? `?${queryString}` : ''}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+}
+
+export function getProperty(token, propertyId) {
+  return request(`/properties/${propertyId}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
 }
@@ -56,19 +67,18 @@ export function updateProperty(token, propertyId, property) {
   });
 }
 
-export function updatePropertyKiv(token, propertyId, isKiv) {
-  return request(`/properties/${propertyId}/kiv`, {
+export function updatePropertyArchive(token, propertyId, archived) {
+  return request(`/properties/${propertyId}/archive`, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ isKiv }),
+    body: JSON.stringify({ archived }),
   });
 }
 
-export function softDeleteProperty(token, propertyId) {
-  return request(`/properties/${propertyId}/status`, {
-    method: 'PATCH',
+export function permanentlyDeleteProperty(token, propertyId) {
+  return request(`/properties/${propertyId}`, {
+    method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ status: 'D' }),
   });
 }
 

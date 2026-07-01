@@ -201,76 +201,191 @@ app.delete('/api/users/:id', authenticate, adminOnly, async (req, res, next) => 
   }
 });
 
-app.get('/api/properties', async (_req, res, next) => {
+function getOptionalRequestUser(req) {
+  const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
+  if (!token) return null;
   try {
-    let isAdminRequest = false;
-    const token = _req.headers.authorization?.replace(/^Bearer\s+/i, '');
+    return jwt.verify(token, jwtSecret);
+  } catch {
+    return null;
+  }
+}
 
-    if (token) {
-      try {
-        const user = jwt.verify(token, jwtSecret);
-        isAdminRequest = user.role === 'admin';
-      } catch {
-        isAdminRequest = false;
-      }
+function mapPropertyFiles(projectImages, salesPackages) {
+  const imagesByProperty = projectImages.reduce((images, image) => {
+    const propertyImages = images.get(image.propertyId) || [];
+    propertyImages.push({
+      id: image.id,
+      name: image.name,
+      url: `/api/property-images/${image.id}`,
+    });
+    images.set(image.propertyId, propertyImages);
+    return images;
+  }, new Map());
+  const packagesByProperty = salesPackages.reduce((packages, item) => {
+    const propertyPackages = packages.get(item.propertyId) || [];
+    propertyPackages.push({
+      id: item.id,
+      name: item.name,
+      url: `/api/property-sales-packages/${item.id}/view`,
+    });
+    packages.set(item.propertyId, propertyPackages);
+    return packages;
+  }, new Map());
+  return { imagesByProperty, packagesByProperty };
+}
+
+app.get('/api/properties', async (req, res, next) => {
+  try {
+    const requestUser = getOptionalRequestUser(req);
+    const isAdminRequest = requestUser?.role === 'admin';
+    const pageSize = 20;
+    const requestedPage = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+    const archived = isAdminRequest && String(req.query.archived).toLowerCase() === 'true';
+    const search = String(req.query.search || '').trim();
+    const location = String(req.query.location || '').trim();
+    const status = propertyStatuses.includes(req.query.status) ? req.query.status : '';
+    const where = [`p.status <> 'D'`, 'p.is_archived = ?'];
+    const parameters = [archived ? 1 : 0];
+
+    if (search) {
+      const searchValue = `%${search}%`;
+      where.push(`(
+        p.name LIKE ?
+        OR p.location LIKE ?
+        OR COALESCE(a.name, p.agent_name) LIKE ?
+        OR p.status LIKE ?
+        OR CAST(p.price AS CHAR) LIKE ?
+        OR EXISTS (
+          SELECT 1 FROM property_sales_packages search_packages
+          WHERE search_packages.property_id = p.id AND search_packages.name LIKE ?
+        )
+      )`);
+      parameters.push(searchValue, searchValue, searchValue, searchValue, searchValue, searchValue);
+    }
+    if (location) {
+      where.push('p.location LIKE ?');
+      parameters.push(`%${location}%`);
+    }
+    if (status) {
+      where.push('p.status = ?');
+      parameters.push(status);
     }
 
-    const [properties] = await pool.query(`
+    const whereSql = where.join(' AND ');
+    const [[countResult]] = await pool.execute(`
+      SELECT COUNT(*) AS total
+      FROM properties p
+      LEFT JOIN agents a ON a.id = p.agent_id
+      WHERE ${whereSql}
+    `, parameters);
+    const total = Number(countResult.total);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(requestedPage, totalPages);
+    const offset = (page - 1) * pageSize;
+
+    const [properties] = await pool.execute(`
       SELECT
         p.id,
         p.name,
         p.location,
         p.price,
         p.status,
-        p.is_kiv AS isKiv,
+        p.is_archived AS isArchived,
         COALESCE(a.name, p.agent_name) AS agent,
         p.image,
-        p.notes,
-        p.remarks,
+        DATE_FORMAT(COALESCE(p.updated_at, p.created_at), '%d %b %Y') AS updated
+      FROM properties p
+      LEFT JOIN agents a ON a.id = p.agent_id
+      WHERE ${whereSql}
+      ORDER BY COALESCE(p.updated_at, p.created_at) DESC
+      LIMIT ? OFFSET ?
+    `, [...parameters, pageSize, offset]);
+
+    const propertyIds = properties.map((property) => property.id);
+    let projectImages = [];
+    let salesPackages = [];
+    if (propertyIds.length) {
+      const placeholders = propertyIds.map(() => '?').join(', ');
+      [projectImages] = await pool.execute(`
+        SELECT id, property_id AS propertyId, name
+        FROM property_images
+        WHERE property_id IN (${placeholders})
+        ORDER BY property_id, sort_order, id
+      `, propertyIds);
+      [salesPackages] = await pool.execute(`
+        SELECT id, property_id AS propertyId, name
+        FROM property_sales_packages
+        WHERE property_id IN (${placeholders})
+        ORDER BY property_id, sort_order, id
+      `, propertyIds);
+    }
+    const { imagesByProperty, packagesByProperty } = mapPropertyFiles(projectImages, salesPackages);
+
+    const counts = { active: total, archived: 0 };
+    if (isAdminRequest) {
+      const [archiveCounts] = await pool.query(`
+        SELECT is_archived AS isArchived, COUNT(*) AS total
+        FROM properties
+        WHERE status <> 'D'
+        GROUP BY is_archived
+      `);
+      archiveCounts.forEach((item) => {
+        counts[item.isArchived ? 'archived' : 'active'] = Number(item.total);
+      });
+    }
+
+    res.json({
+      items: properties.map((property) => ({
+        ...property,
+        isArchived: Boolean(property.isArchived),
+        projectImages: imagesByProperty.get(property.id) || [],
+        salesPackages: packagesByProperty.get(property.id) || [],
+      })),
+      total,
+      page,
+      pageSize,
+      totalPages,
+      counts,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/properties/:id', async (req, res, next) => {
+  try {
+    const requestUser = getOptionalRequestUser(req);
+    const [properties] = await pool.execute(`
+      SELECT p.id, p.name, p.location, p.price, p.status,
+        p.is_archived AS isArchived, COALESCE(a.name, p.agent_name) AS agent,
+        p.image, p.notes, p.remarks,
         p.sales_package_calculator AS salesPackageCalculator,
         DATE_FORMAT(COALESCE(p.updated_at, p.created_at), '%d %b %Y') AS updated
       FROM properties p
       LEFT JOIN agents a ON a.id = p.agent_id
-      WHERE p.status <> 'D'
-        ${isAdminRequest ? '' : 'AND p.is_kiv = 0'}
-      ORDER BY COALESCE(p.updated_at, p.created_at) DESC
-    `);
-    const [projectImages] = await pool.query(`
-      SELECT id, property_id AS propertyId, name
-      FROM property_images
-      ORDER BY property_id, sort_order, id
-    `);
-    const [salesPackages] = await pool.query(`
-      SELECT id, property_id AS propertyId, name
-      FROM property_sales_packages
-      ORDER BY property_id, sort_order, id
-    `);
-    const imagesByProperty = projectImages.reduce((images, projectImage) => {
-      const propertyImages = images.get(projectImage.propertyId) || [];
-      propertyImages.push({
-        id: projectImage.id,
-        name: projectImage.name,
-        url: `/api/property-images/${projectImage.id}`,
-      });
-      images.set(projectImage.propertyId, propertyImages);
-      return images;
-    }, new Map());
-    const salesPackagesByProperty = salesPackages.reduce((packages, salesPackage) => {
-      const propertyPackages = packages.get(salesPackage.propertyId) || [];
-      propertyPackages.push({
-        id: salesPackage.id,
-        name: salesPackage.name,
-        url: `/api/property-sales-packages/${salesPackage.id}/view`,
-      });
-      packages.set(salesPackage.propertyId, propertyPackages);
-      return packages;
-    }, new Map());
-
-    res.json(properties.map((property) => ({
+      WHERE p.id = ? AND p.status <> 'D'
+      LIMIT 1
+    `, [req.params.id]);
+    const property = properties[0];
+    if (!property || (property.isArchived && requestUser?.role !== 'admin')) {
+      return res.status(404).json({ message: 'Property not found.' });
+    }
+    const [projectImages] = await pool.execute(`
+      SELECT id, property_id AS propertyId, name FROM property_images
+      WHERE property_id = ? ORDER BY sort_order, id
+    `, [property.id]);
+    const [salesPackages] = await pool.execute(`
+      SELECT id, property_id AS propertyId, name FROM property_sales_packages
+      WHERE property_id = ? ORDER BY sort_order, id
+    `, [property.id]);
+    const { imagesByProperty, packagesByProperty } = mapPropertyFiles(projectImages, salesPackages);
+    res.json({
       ...property,
+      isArchived: Boolean(property.isArchived),
       projectImages: imagesByProperty.get(property.id) || [],
-      salesPackages: salesPackagesByProperty.get(property.id) || [],
-    })));
+      salesPackages: packagesByProperty.get(property.id) || [],
+    });
   } catch (error) {
     next(error);
   }
@@ -526,44 +641,36 @@ app.patch('/api/properties/:id', authenticate, adminOnly, async (req, res, next)
   }
 });
 
-app.patch('/api/properties/:id/kiv', authenticate, adminOnly, async (req, res, next) => {
+app.patch('/api/properties/:id/archive', authenticate, adminOnly, async (req, res, next) => {
   try {
-    const isKiv = Boolean(req.body.isKiv);
+    const archived = Boolean(req.body.archived);
     const [result] = await pool.execute(
       `UPDATE properties
-       SET is_kiv = ?, updated_at = CURRENT_TIMESTAMP
+       SET is_archived = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND status <> 'D'`,
-      [isKiv ? 1 : 0, req.params.id]
+      [archived ? 1 : 0, req.params.id]
     );
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: 'Active property not found.' });
     }
 
-    res.json({ message: isKiv ? 'Property marked as KIV.' : 'Property restored from KIV.' });
+    res.json({ message: archived ? 'Property archived.' : 'Property restored.' });
   } catch (error) {
     next(error);
   }
 });
 
-app.patch('/api/properties/:id/status', authenticate, adminOnly, async (req, res, next) => {
+app.delete('/api/properties/:id', authenticate, adminOnly, async (req, res, next) => {
   try {
-    if (req.body.status !== 'D') {
-      return res.status(400).json({ message: 'Only soft-delete status D is supported.' });
-    }
-
     const [result] = await pool.execute(
-      `UPDATE properties
-       SET status = 'D', updated_at = CURRENT_TIMESTAMP
-       WHERE id = ? AND status <> 'D'`,
+      'DELETE FROM properties WHERE id = ? AND is_archived = 1',
       [req.params.id]
     );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: 'Active property not found.' });
+    if (!result.affectedRows) {
+      return res.status(404).json({ message: 'Archived property not found.' });
     }
-
-    res.json({ message: 'Property deleted from active listings.' });
+    res.json({ message: 'Property permanently deleted.' });
   } catch (error) {
     next(error);
   }
